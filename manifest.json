@@ -1,0 +1,11 @@
+{
+	"id": "obsidian-annotation-plugin",
+	"name": "Obsidian Annotation Plugin",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "一款支持PC和Mobile端的批注插件，可在阅读文章时对选中文字添加批注，支持双向跳转和高亮显示。",
+	"author": "Your Name",
+	"authorUrl": "",
+	"fundingUrl": "",
+	"isDesktopOnly": false
+}

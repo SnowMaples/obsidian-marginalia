@@ -1,0 +1,537 @@
+/* 
+ * Obsidian Annotation Plugin Styles
+ */
+
+/* 批注高亮样式 */
+.annotation-highlight {
+    background-color: var(--annotation-highlight-color, #ffeb3b);
+    border-radius: 2px;
+    padding: 0 2px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.annotation-highlight:hover {
+    background-color: var(--annotation-highlight-hover-color, #fdd835);
+}
+
+/* 被选中的批注高亮样式（从右侧边栏点击时） */
+.annotation-highlight-active {
+    background-color: #ff6b6b !important;
+    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.7) !important;
+    animation: pulse 1.5s ease-in-out 3;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(255, 107, 107, 0.3);
+    }
+}
+
+/* Ctrl 键按下时的高亮样式 */
+body.ctrl-pressed .annotation-highlight {
+    cursor: alias !important;
+    box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.5);
+}
+
+body.ctrl-pressed .annotation-highlight:hover {
+    background-color: #ff6b6b !important;
+    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.7);
+}
+
+/* 移动端批注按钮 */
+.annotation-mobile-button {
+    position: absolute;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    animation: fadeIn 0.2s ease;
+}
+
+.annotation-mobile-button:hover {
+    background-color: var(--interactive-accent-hover);
+}
+
+/* 批注悬浮提示（双击显示） */
+.annotation-tooltip {
+    position: absolute;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    padding: 12px;
+    width: 300px;
+    max-height: 300px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 关闭按钮 */
+.annotation-tooltip-close {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--text-muted);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    padding: 0;
+}
+
+.annotation-tooltip-close:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+/* 内容容器（可滚动） */
+.annotation-tooltip-content-container {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 200px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    padding-right: 4px;
+}
+
+.annotation-tooltip-content-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.annotation-tooltip-content-container::-webkit-scrollbar-track {
+    background: var(--background-secondary);
+    border-radius: 3px;
+}
+
+.annotation-tooltip-content-container::-webkit-scrollbar-thumb {
+    background: var(--background-modifier-border);
+    border-radius: 3px;
+}
+
+.annotation-tooltip-content {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-normal);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* 底部栏 */
+.annotation-tooltip-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 8px;
+    border-top: 1px solid var(--background-modifier-border);
+    margin-top: 4px;
+}
+
+.annotation-tooltip-date {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.annotation-tooltip-btn-group {
+    display: flex;
+    gap: 6px;
+}
+
+.annotation-tooltip-btn {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.annotation-tooltip-btn:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.annotation-tooltip-btn-delete {
+    color: var(--text-error);
+}
+
+.annotation-tooltip-btn-delete:hover {
+    background-color: var(--background-modifier-error);
+    color: var(--text-error);
+}
+
+/* 批注编辑弹窗样式 */
+.annotation-modal {
+    max-width: 500px;
+}
+
+.annotation-selected-label,
+.annotation-content-label {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-normal);
+}
+
+.annotation-selected-text {
+    background-color: var(--background-secondary);
+    border-left: 3px solid var(--interactive-accent);
+    padding: 10px 15px;
+    margin: 10px 0;
+    font-style: italic;
+    color: var(--text-muted);
+    border-radius: 0 4px 4px 0;
+}
+
+.annotation-textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.annotation-textarea:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+}
+
+.annotation-button-container {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* 右侧功能区批注视图 - 类似出链列表 */
+.annotation-right-sidebar-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.annotation-sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary-alt);
+    flex-shrink: 0;
+}
+
+.annotation-sidebar-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-normal);
+}
+
+.annotation-sidebar-count {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.annotation-sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.annotation-sidebar-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.annotation-sidebar-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.annotation-sidebar-content::-webkit-scrollbar-thumb {
+    background: var(--background-modifier-border);
+    border-radius: 3px;
+}
+
+.annotation-sidebar-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px 20px;
+    font-size: 13px;
+}
+
+.annotation-sidebar-item {
+    padding: 10px 12px 24px 12px;
+    margin-bottom: 8px;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.annotation-sidebar-item:hover {
+    border-color: var(--interactive-accent);
+    background-color: var(--background-secondary);
+}
+
+.annotation-sidebar-item.active {
+    border-color: var(--interactive-accent);
+    background-color: var(--background-secondary-alt);
+    box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+.annotation-sidebar-quote {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-bottom: 6px;
+    padding-left: 8px;
+    border-left: 2px solid var(--interactive-accent);
+    line-height: 1.4;
+}
+
+.annotation-sidebar-comment {
+    font-size: 13px;
+    color: var(--text-normal);
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+
+.annotation-sidebar-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.annotation-sidebar-item:hover .annotation-sidebar-actions {
+    opacity: 1;
+}
+
+.annotation-sidebar-btn {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.annotation-sidebar-btn:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.annotation-sidebar-btn-delete {
+    color: var(--text-error);
+}
+
+.annotation-sidebar-btn-delete:hover {
+    background-color: var(--background-modifier-error);
+    color: var(--text-error);
+}
+
+/* 日期时间样式 - 左下角，默认隐藏 */
+.annotation-sidebar-date {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    font-size: 10px;
+    color: var(--text-faint);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.annotation-sidebar-item:hover .annotation-sidebar-date {
+    opacity: 1;
+}
+
+/* 功能区图标样式 */
+.workspace-tab-header[data-type="annotation-preview-view"] .workspace-tab-header-inner-icon {
+    color: var(--interactive-accent);
+}
+
+/* 动画 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 移动端适配 */
+.is-mobile .annotation-tooltip {
+    max-width: 90vw;
+    max-height: 50vh;
+}
+
+.is-mobile .annotation-mobile-button {
+    padding: 8px 16px;
+    font-size: 16px;
+}
+
+/* Word 式侧边批注面板 */
+.has-annotation-sidebar .view-content {
+    display: flex !important;
+    flex-direction: row !important;
+}
+
+.annotation-word-sidebar {
+    width: 250px;
+    min-width: 250px;
+    max-width: 250px;
+    background-color: var(--background-secondary);
+    border-left: 1px solid var(--background-modifier-border);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.annotation-word-sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    font-weight: 600;
+    font-size: 14px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary-alt);
+}
+
+.annotation-word-sidebar-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+}
+
+.annotation-word-sidebar-close:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.annotation-word-sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.annotation-word-sidebar-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.annotation-word-sidebar-content::-webkit-scrollbar-track {
+    background: var(--background-secondary);
+}
+
+.annotation-word-sidebar-content::-webkit-scrollbar-thumb {
+    background: var(--background-modifier-border);
+    border-radius: 2px;
+}
+
+.annotation-word-sidebar-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px 20px;
+    font-size: 14px;
+}
+
+.annotation-word-sidebar-item {
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.annotation-word-sidebar-item:hover {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.annotation-word-sidebar-item.active {
+    border-color: var(--interactive-accent);
+    background-color: var(--background-secondary);
+    box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+.annotation-word-sidebar-selected {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--background-modifier-border);
+    line-height: 1.4;
+}
+
+.annotation-word-sidebar-text {
+    font-size: 13px;
+    color: var(--text-normal);
+    line-height: 1.5;
+}
+
+/* 调整编辑器区域大小 */
+.has-annotation-sidebar .cm-editor {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 打印样式 */
+@media print {
+    .annotation-highlight {
+        background-color: #ffeb3b !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .annotation-tooltip,
+    .annotation-mobile-button,
+    .annotation-word-sidebar {
+        display: none !important;
+    }
+}
