@@ -31,6 +31,7 @@ var import_obsidian = require("obsidian");
 var import_view = require("@codemirror/view");
 var import_state = require("@codemirror/state");
 var ANNOTATION_PREVIEW_VIEW_TYPE = "annotation-preview-view";
+var annotationsUpdatedEffect = import_state.StateEffect.define();
 var DEFAULT_SETTINGS = {
   annotationFolder: "Annotations",
   showAnnotationPreview: true,
@@ -43,9 +44,17 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
     this.annotations = /* @__PURE__ */ new Map();
     this.highlightPlugin = null;
     this.activeTooltip = null;
+    this.isMobile = false;
+    this.touchStartTime = 0;
+    this.touchStartPos = { x: 0, y: 0 };
   }
   async onload() {
     console.log("\u52A0\u8F7D\u6279\u6CE8\u63D2\u4EF6");
+    this.isMobile = this.detectMobile();
+    if (this.isMobile) {
+      console.log("\u68C0\u6D4B\u5230\u79FB\u52A8\u7AEF\u8BBE\u5907");
+      document.body.classList.add("annotation-mobile");
+    }
     await this.loadSettings();
     this.registerHighlightPlugin();
     this.addSettingTab(new AnnotationSettingTab(this.app, this));
@@ -54,7 +63,7 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
       await this.loadAnnotations();
       this.refreshHighlights();
       const activeFile = this.getActiveFile();
-      if (activeFile) {
+      if (activeFile && !this.isMobile) {
         this.updateAnnotationPanel();
       }
     });
@@ -69,42 +78,48 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
         if (file) {
           setTimeout(() => {
             this.refreshHighlights();
-            this.updateAnnotationPanel();
+            if (!this.isMobile) {
+              this.updateAnnotationPanel();
+            }
           }, 100);
         }
       })
     );
-    this.registerDomEvent(document, "click", (evt) => {
-      this.handleEditorClick(evt);
-    });
-    this.registerDomEvent(document, "dblclick", (evt) => {
-      const target = evt.target;
-      if (target.classList.contains("annotation-highlight") || target.closest(".annotation-highlight")) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        const highlightEl = target.classList.contains("annotation-highlight") ? target : target.closest(".annotation-highlight");
-        const annotationId = highlightEl.getAttribute("data-annotation-id");
-        if (annotationId) {
-          this.showAnnotationTooltip(highlightEl, annotationId);
+    if (this.isMobile) {
+      this.registerMobileEvents();
+    } else {
+      this.registerDomEvent(document, "click", (evt) => {
+        this.handleEditorClick(evt);
+      });
+      this.registerDomEvent(document, "dblclick", (evt) => {
+        const target = evt.target;
+        if (target.classList.contains("annotation-highlight") || target.closest(".annotation-highlight")) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          const highlightEl = target.classList.contains("annotation-highlight") ? target : target.closest(".annotation-highlight");
+          const annotationId = highlightEl.getAttribute("data-annotation-id");
+          if (annotationId) {
+            this.showAnnotationTooltip(highlightEl, annotationId);
+          }
         }
-      }
-    });
-    this.registerDomEvent(document, "click", (evt) => {
-      const target = evt.target;
-      if (!target.closest(".annotation-tooltip") && this.activeTooltip) {
-        this.hideAnnotationTooltip();
-      }
-    });
-    this.registerDomEvent(document, "keydown", (evt) => {
-      if (evt.ctrlKey || evt.metaKey) {
-        document.body.classList.add("ctrl-pressed");
-      }
-    });
-    this.registerDomEvent(document, "keyup", (evt) => {
-      if (!evt.ctrlKey && !evt.metaKey) {
-        document.body.classList.remove("ctrl-pressed");
-      }
-    });
+      });
+      this.registerDomEvent(document, "click", (evt) => {
+        const target = evt.target;
+        if (!target.closest(".annotation-tooltip") && this.activeTooltip) {
+          this.hideAnnotationTooltip();
+        }
+      });
+      this.registerDomEvent(document, "keydown", (evt) => {
+        if (evt.ctrlKey || evt.metaKey) {
+          document.body.classList.add("ctrl-pressed");
+        }
+      });
+      this.registerDomEvent(document, "keyup", (evt) => {
+        if (!evt.ctrlKey && !evt.metaKey) {
+          document.body.classList.remove("ctrl-pressed");
+        }
+      });
+    }
     this.addCommand({
       id: "add-annotation",
       name: "\u6DFB\u52A0\u6279\u6CE8",
@@ -176,50 +191,71 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
       new import_obsidian.Notice("\u65E0\u6CD5\u83B7\u53D6\u5F53\u524D\u6587\u4EF6\u8DEF\u5F84");
       return;
     }
-    new AnnotationModal(this.app, selection, async (content) => {
-      const annotation = {
-        id: this.generateId(),
-        sourceFile,
-        startOffset,
-        endOffset,
-        selectedText: selection,
-        content,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      };
-      await this.saveAnnotation(annotation);
-      setTimeout(() => {
-        this.forceRefreshHighlights();
-      }, 50);
-      await this.updateAnnotationPanel();
-      new import_obsidian.Notice("\u6279\u6CE8\u5DF2\u4FDD\u5B58");
-    }).open();
+    this.hideAnnotationTooltip();
+    setTimeout(() => {
+      new AnnotationModal(this.app, selection, async (content) => {
+        const annotation = {
+          id: this.generateId(),
+          sourceFile,
+          startOffset,
+          endOffset,
+          selectedText: selection,
+          content,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        await this.saveAnnotation(annotation);
+        setTimeout(() => {
+          this.forceRefreshHighlights();
+        }, 50);
+        await this.updateAnnotationPanel();
+        new import_obsidian.Notice("\u6279\u6CE8\u5DF2\u4FDD\u5B58");
+      }).open();
+    }, 50);
   }
   // 保存批注
   async saveAnnotation(annotation) {
     await this.ensureAnnotationFolder();
     const annotationFilePath = this.getAnnotationFilePath(annotation.sourceFile);
     let existingAnnotations = [];
+    let fileExists = false;
     try {
-      const file2 = this.app.vault.getAbstractFileByPath(annotationFilePath);
-      if (file2 instanceof import_obsidian.TFile) {
-        const content = await this.app.vault.read(file2);
-        existingAnnotations = this.parseAnnotationFile(content);
+      const file = this.app.vault.getAbstractFileByPath(annotationFilePath);
+      if (file instanceof import_obsidian.TFile) {
+        try {
+          const content = await this.app.vault.read(file);
+          existingAnnotations = this.parseAnnotationFile(content) || [];
+          fileExists = true;
+        } catch (readError) {
+          fileExists = false;
+          existingAnnotations = [];
+        }
       }
     } catch (e) {
+      fileExists = false;
     }
     existingAnnotations.push(annotation);
     const fileContent = this.formatAnnotationFile(existingAnnotations, annotation.sourceFile);
-    const file = this.app.vault.getAbstractFileByPath(annotationFilePath);
-    if (file instanceof import_obsidian.TFile) {
-      await this.app.vault.modify(file, fileContent);
-    } else {
-      await this.app.vault.create(annotationFilePath, fileContent);
+    try {
+      if (fileExists) {
+        const file = this.app.vault.getAbstractFileByPath(annotationFilePath);
+        if (file instanceof import_obsidian.TFile) {
+          await this.app.vault.modify(file, fileContent);
+        } else {
+          await this.app.vault.create(annotationFilePath, fileContent);
+        }
+      } else {
+        await this.app.vault.create(annotationFilePath, fileContent);
+      }
+    } catch (writeError) {
+      console.error("\u4FDD\u5B58\u6279\u6CE8\u6587\u4EF6\u5931\u8D25:", writeError);
+      throw new Error("\u4FDD\u5B58\u6279\u6CE8\u5931\u8D25: " + writeError.message);
     }
     this.annotations.set(annotation.sourceFile, existingAnnotations);
   }
   // 加载批注
   async loadAnnotations() {
+    this.annotations.clear();
     const folder = this.app.vault.getAbstractFileByPath(this.settings.annotationFolder);
     if (folder instanceof import_obsidian.TFolder) {
       for (const file of folder.children) {
@@ -330,13 +366,13 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
     const content = await this.app.vault.read(file);
     let annotations = this.parseAnnotationFile(content);
     annotations = annotations.filter((a) => a.id !== annotationId);
+    const fileContent = this.formatAnnotationFile(annotations, sourceFile);
+    await this.app.vault.modify(file, fileContent);
     if (annotations.length === 0) {
-      await this.app.vault.delete(file);
+      this.annotations.delete(sourceFile);
     } else {
-      const fileContent = this.formatAnnotationFile(annotations, sourceFile);
-      await this.app.vault.modify(file, fileContent);
+      this.annotations.set(sourceFile, annotations);
     }
-    this.annotations.set(sourceFile, annotations);
   }
   // 格式化批注文件
   formatAnnotationFile(annotations, sourceFile) {
@@ -389,22 +425,45 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
   }
   // 确保批注文件夹存在
   async ensureAnnotationFolder() {
-    const folder = this.app.vault.getAbstractFileByPath(this.settings.annotationFolder);
-    if (!folder) {
-      await this.app.vault.createFolder(this.settings.annotationFolder);
+    var _a;
+    try {
+      const folder = this.app.vault.getAbstractFileByPath(this.settings.annotationFolder);
+      if (!folder) {
+        await this.app.vault.createFolder(this.settings.annotationFolder);
+      }
+    } catch (error) {
+      if (!((_a = error.message) == null ? void 0 : _a.includes("already exists"))) {
+        throw error;
+      }
     }
   }
   // 注册高亮插件
   registerHighlightPlugin() {
     const plugin = this;
+    const annotationsField = import_state.StateField.define({
+      create() {
+        return 0;
+      },
+      update(value, tr) {
+        for (const effect of tr.effects) {
+          if (effect.is(annotationsUpdatedEffect)) {
+            return value + 1;
+          }
+        }
+        return value;
+      }
+    });
     this.highlightPlugin = import_view.ViewPlugin.fromClass(
       class {
         constructor(view) {
+          this.lastUpdateCount = 0;
           this.decorations = plugin.buildDecorations(view);
         }
         update(update) {
-          if (update.docChanged || update.viewportChanged) {
+          const currentCount = update.state.field(annotationsField);
+          if (update.docChanged || update.viewportChanged || currentCount !== this.lastUpdateCount) {
             this.decorations = plugin.buildDecorations(update.view);
+            this.lastUpdateCount = currentCount;
           }
         }
       },
@@ -412,7 +471,7 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
         decorations: (v) => v.decorations
       }
     );
-    this.registerEditorExtension(this.highlightPlugin);
+    this.registerEditorExtension([annotationsField, this.highlightPlugin]);
   }
   // 构建装饰器
   buildDecorations(view) {
@@ -465,7 +524,6 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
     if (!file)
       return;
     const annotations = this.annotations.get(file.path) || [];
-    console.log("\u66F4\u65B0\u9AD8\u4EAE:", file.path, annotations.length, "\u4E2A\u6279\u6CE8");
     const editorView = view.editor.cm;
     if (editorView) {
       editorView.dispatch({
@@ -482,7 +540,9 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
       if (view && view.file && view.editor) {
         const editorView = view.editor.cm;
         if (editorView) {
-          editorView.dispatch({ effects: [] });
+          editorView.dispatch({
+            effects: annotationsUpdatedEffect.of()
+          });
         }
       }
     }
@@ -491,7 +551,9 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
       if (activeView && activeView.editor) {
         const editorView = activeView.editor.cm;
         if (editorView) {
-          editorView.dispatch({ effects: [] });
+          editorView.dispatch({
+            effects: annotationsUpdatedEffect.of()
+          });
         }
       }
     }
@@ -603,8 +665,16 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
       cls: "annotation-tooltip-content-container"
     });
     const contentEl = contentContainer.createEl("div", {
-      cls: "annotation-tooltip-content",
-      text: annotation.content
+      cls: "annotation-tooltip-content markdown-rendered"
+    });
+    import_obsidian.MarkdownRenderer.render(
+      this.app,
+      annotation.content,
+      contentEl,
+      annotation.sourceFile,
+      this
+    ).then(() => {
+      this.setupImageHoverPreview(contentEl);
     });
     const footerEl = tooltip.createEl("div", {
       cls: "annotation-tooltip-footer"
@@ -625,45 +695,49 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
     editBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
     editBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.hideAnnotationTooltip();
-      new AnnotationEditModal(this.app, annotation, async (newContent) => {
-        annotation.content = newContent;
-        await this.updateAnnotation(annotation);
-        this.updateAnnotationPanel();
-        this.forceRefreshHighlights();
-        new import_obsidian.Notice("\u6279\u6CE8\u5DF2\u66F4\u65B0");
-      }).open();
+      this.enableInlineEdit(tooltip, annotation, contentEl, contentContainer);
     });
     const deleteBtn = btnGroup.createEl("button", {
       cls: "annotation-tooltip-btn annotation-tooltip-btn-delete",
       attr: { "aria-label": "\u5220\u9664\u6279\u6CE8" }
     });
     deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>';
-    deleteBtn.addEventListener("click", (e) => {
+    deleteBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      this.hideAnnotationTooltip();
-      const plugin = this;
-      plugin.deleteAnnotation(annotation.id, annotation.sourceFile).then(() => {
-        document.querySelectorAll(`.annotation-highlight[data-annotation-id="${annotation.id}"]`).forEach((el) => {
-          el.classList.remove("annotation-highlight");
-          el.removeAttribute("data-annotation-id");
-        });
-        plugin.updateAnnotationPanel();
-        plugin.forceRefreshHighlights();
+      if (this.activeTooltip) {
+        const tooltipToRemove = this.activeTooltip;
+        this.activeTooltip = null;
+        tooltipToRemove.remove();
+      }
+      try {
+        await this.deleteAnnotation(annotation.id, annotation.sourceFile);
+        this.updateAnnotationPanel();
+        this.forceRefreshHighlights();
         new import_obsidian.Notice("\u6279\u6CE8\u5DF2\u5220\u9664");
-      }).catch((error) => {
+      } catch (error) {
         console.error("\u5220\u9664\u6279\u6CE8\u5931\u8D25:", error);
         new import_obsidian.Notice("\u5220\u9664\u6279\u6CE8\u5931\u8D25");
-      });
+      }
     });
-    const rect = element.getBoundingClientRect();
-    tooltip.style.left = `${rect.left}px`;
-    tooltip.style.top = `${rect.bottom + 5}px`;
-    if (rect.left + 300 > window.innerWidth) {
-      tooltip.style.left = `${window.innerWidth - 320}px`;
-    }
-    if (rect.bottom + 250 > window.innerHeight) {
-      tooltip.style.top = `${rect.top - 260}px`;
+    if (this.isMobile) {
+      tooltip.style.position = "fixed";
+      tooltip.style.left = "50%";
+      tooltip.style.transform = "translateX(-50%)";
+      tooltip.style.bottom = "20px";
+      tooltip.style.top = "auto";
+      tooltip.style.maxWidth = "90vw";
+      tooltip.style.width = "90vw";
+      tooltip.style.maxHeight = "60vh";
+    } else {
+      const rect = element.getBoundingClientRect();
+      tooltip.style.left = `${rect.left}px`;
+      tooltip.style.top = `${rect.bottom + 5}px`;
+      if (rect.left + 300 > window.innerWidth) {
+        tooltip.style.left = `${window.innerWidth - 320}px`;
+      }
+      if (rect.bottom + 250 > window.innerHeight) {
+        tooltip.style.top = `${rect.top - 260}px`;
+      }
     }
     document.body.appendChild(tooltip);
     this.activeTooltip = tooltip;
@@ -674,6 +748,233 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
       this.activeTooltip.remove();
       this.activeTooltip = null;
     }
+  }
+  // 启用行内编辑模式
+  enableInlineEdit(tooltip, annotation, contentEl, contentContainer) {
+    const originalContent = annotation.content;
+    let isEditing = true;
+    contentContainer.empty();
+    const textarea = contentContainer.createEl("textarea", {
+      cls: "annotation-inline-editor"
+    });
+    textarea.value = originalContent;
+    textarea.style.cssText = `
+			width: 100%;
+			min-height: 100px;
+			max-height: 200px;
+			resize: vertical;
+			border: 1px solid var(--background-modifier-border);
+			border-radius: 4px;
+			padding: 8px;
+			background: var(--background-primary);
+			color: var(--text-normal);
+			font-size: 14px;
+			line-height: 1.5;
+		`;
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    const stopPropagation = (e) => {
+      e.stopPropagation();
+    };
+    textarea.addEventListener("click", stopPropagation);
+    textarea.addEventListener("mousedown", stopPropagation);
+    textarea.addEventListener("mouseup", stopPropagation);
+    contentContainer.addEventListener("click", stopPropagation);
+    const cancelEdit = () => {
+      if (!isEditing)
+        return;
+      isEditing = false;
+      textarea.removeEventListener("click", stopPropagation);
+      textarea.removeEventListener("mousedown", stopPropagation);
+      textarea.removeEventListener("mouseup", stopPropagation);
+      contentContainer.removeEventListener("click", stopPropagation);
+      contentContainer.empty();
+      const newContentEl = contentContainer.createEl("div", {
+        cls: "annotation-tooltip-content markdown-rendered"
+      });
+      import_obsidian.MarkdownRenderer.render(
+        this.app,
+        originalContent,
+        newContentEl,
+        annotation.sourceFile,
+        this
+      ).then(() => {
+        this.setupImageHoverPreview(newContentEl);
+      });
+    };
+    const saveEdit = async () => {
+      if (!isEditing)
+        return;
+      isEditing = false;
+      textarea.removeEventListener("click", stopPropagation);
+      textarea.removeEventListener("mousedown", stopPropagation);
+      textarea.removeEventListener("mouseup", stopPropagation);
+      contentContainer.removeEventListener("click", stopPropagation);
+      const newContent = textarea.value.trim();
+      if (!newContent) {
+        cancelEdit();
+        return;
+      }
+      annotation.content = newContent;
+      await this.updateAnnotation(annotation);
+      contentContainer.empty();
+      const newContentEl = contentContainer.createEl("div", {
+        cls: "annotation-tooltip-content markdown-rendered"
+      });
+      import_obsidian.MarkdownRenderer.render(
+        this.app,
+        newContent,
+        newContentEl,
+        annotation.sourceFile,
+        this
+      ).then(() => {
+        this.setupImageHoverPreview(newContentEl);
+      });
+      this.updateAnnotationPanel();
+      this.forceRefreshHighlights();
+    };
+    textarea.addEventListener("blur", () => {
+      setTimeout(() => {
+        if (isEditing) {
+          saveEdit();
+        }
+      }, 200);
+    });
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cancelEdit();
+      } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        saveEdit();
+      }
+    });
+  }
+  // 设置图片悬停预览功能
+  setupImageHoverPreview(container) {
+    const images = container.querySelectorAll("img");
+    images.forEach((img) => {
+      var _a;
+      img.style.display = "none";
+      const imgLink = document.createElement("span");
+      imgLink.className = "annotation-image-link";
+      imgLink.textContent = "\u{1F5BC}\uFE0F \u56FE\u7247";
+      imgLink.style.cursor = "pointer";
+      imgLink.style.color = "var(--text-accent)";
+      imgLink.style.textDecoration = "underline";
+      imgLink.style.margin = "0 4px";
+      let previewEl = null;
+      imgLink.addEventListener("mouseenter", (e) => {
+        if (previewEl)
+          return;
+        previewEl = document.createElement("div");
+        previewEl.className = "annotation-image-preview";
+        previewEl.style.cssText = `
+					position: fixed;
+					background: var(--background-primary);
+					border: 1px solid var(--background-modifier-border);
+					border-radius: 6px;
+					padding: 8px;
+					z-index: 10000;
+					box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+					max-width: 300px;
+					max-height: 200px;
+					overflow: hidden;
+				`;
+        const previewImg = document.createElement("img");
+        previewImg.src = img.src;
+        previewImg.style.cssText = `
+					max-width: 100%;
+					max-height: 180px;
+					object-fit: contain;
+					border-radius: 4px;
+				`;
+        previewEl.appendChild(previewImg);
+        const rect = imgLink.getBoundingClientRect();
+        previewEl.style.left = `${rect.left}px`;
+        previewEl.style.top = `${rect.bottom + 5}px`;
+        if (rect.left + 300 > window.innerWidth) {
+          previewEl.style.left = `${window.innerWidth - 320}px`;
+        }
+        if (rect.bottom + 200 > window.innerHeight) {
+          previewEl.style.top = `${rect.top - 210}px`;
+        }
+        document.body.appendChild(previewEl);
+      });
+      imgLink.addEventListener("mouseleave", () => {
+        if (previewEl) {
+          previewEl.remove();
+          previewEl = null;
+        }
+      });
+      (_a = img.parentNode) == null ? void 0 : _a.insertBefore(imgLink, img);
+    });
+  }
+  // 检测是否为移动端设备
+  detectMobile() {
+    const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    const isSmallScreen = window.innerWidth <= 768;
+    const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+    const isMobileUA = mobileRegex.test(navigator.userAgent);
+    return isTouchDevice && isSmallScreen || isMobileUA;
+  }
+  // 注册移动端事件
+  registerMobileEvents() {
+    this.registerDomEvent(document, "touchend", (evt) => {
+      const touch = evt.changedTouches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (target && (target.classList.contains("annotation-highlight") || target.closest(".annotation-highlight"))) {
+        const now = Date.now();
+        const timeDiff = now - this.touchStartTime;
+        if (timeDiff < 300) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          const highlightEl = target.classList.contains("annotation-highlight") ? target : target.closest(".annotation-highlight");
+          const annotationId = highlightEl.getAttribute("data-annotation-id");
+          if (annotationId) {
+            this.showAnnotationTooltip(highlightEl, annotationId);
+          }
+        }
+        this.touchStartTime = now;
+      }
+    });
+    this.registerDomEvent(document, "touchstart", (evt) => {
+      const touch = evt.touches[0];
+      this.touchStartPos = { x: touch.clientX, y: touch.clientY };
+    });
+    let longPressTimer = null;
+    this.registerDomEvent(document, "touchstart", (evt) => {
+      const touch = evt.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (target && (target.classList.contains("annotation-highlight") || target.closest(".annotation-highlight"))) {
+        longPressTimer = window.setTimeout(() => {
+          const highlightEl = target.classList.contains("annotation-highlight") ? target : target.closest(".annotation-highlight");
+          const annotationId = highlightEl.getAttribute("data-annotation-id");
+          if (annotationId) {
+            this.showAnnotationTooltip(highlightEl, annotationId);
+          }
+        }, 500);
+      }
+    });
+    this.registerDomEvent(document, "touchend", () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    });
+    this.registerDomEvent(document, "touchmove", () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    });
+    this.registerDomEvent(document, "touchstart", (evt) => {
+      const touch = evt.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (this.activeTooltip && !(target == null ? void 0 : target.closest(".annotation-tooltip"))) {
+        this.hideAnnotationTooltip();
+      }
+    });
   }
   // 切换批注预览面板（功能区样式）
   async toggleAnnotationPreview() {
@@ -712,6 +1013,9 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
   }
   // 更新批注面板（自动显示）- 避免重复创建
   async updateAnnotationPanel() {
+    if (this.isMobile) {
+      return;
+    }
     const { workspace } = this.app;
     const existing = workspace.getLeavesOfType(ANNOTATION_PREVIEW_VIEW_TYPE);
     if (existing.length > 0) {
@@ -822,6 +1126,58 @@ var AnnotationPlugin = class extends import_obsidian.Plugin {
 			.annotation-highlight:hover {
 				background-color: var(--annotation-highlight-hover-color, #fdd835);
 			}
+			
+			/* \u79FB\u52A8\u7AEF\u9002\u914D\u6837\u5F0F */
+			.annotation-mobile .annotation-highlight {
+				cursor: default;
+			}
+			
+			/* \u79FB\u52A8\u7AEF tooltip \u6837\u5F0F\u4F18\u5316 */
+			.annotation-mobile .annotation-tooltip {
+				position: fixed;
+				left: 50% !important;
+				transform: translateX(-50%);
+				max-width: 90vw;
+				width: 90vw;
+				max-height: 60vh;
+			}
+			
+			/* \u79FB\u52A8\u7AEF\u884C\u5185\u7F16\u8F91\u5668\u4F18\u5316 */
+			.annotation-mobile .annotation-inline-editor {
+				font-size: 16px !important; /* \u9632\u6B62 iOS \u7F29\u653E */
+				min-height: 120px;
+			}
+			
+			/* \u79FB\u52A8\u7AEF\u4FA7\u8FB9\u680F\u9690\u85CF */
+			.annotation-mobile .annotation-word-sidebar {
+				display: none !important;
+			}
+			
+			/* \u89E6\u6478\u53CD\u9988 */
+			.annotation-mobile .annotation-highlight:active {
+				background-color: var(--annotation-highlight-hover-color, #fdd835);
+				opacity: 0.8;
+			}
+			
+			/* \u79FB\u52A8\u7AEF\u64CD\u4F5C\u6309\u94AE\u4F18\u5316 */
+			.annotation-mobile .annotation-tooltip-btn {
+				min-width: 44px;
+				min-height: 44px;
+				font-size: 16px;
+			}
+			
+			/* \u79FB\u52A8\u7AEF\u6309\u94AE\u5BB9\u5668\u4F18\u5316 */
+			.annotation-mobile .annotation-inline-edit-buttons,
+			.annotation-mobile .annotation-sidebar-inline-edit-buttons {
+				padding: 8px 0;
+			}
+			
+			.annotation-mobile .annotation-inline-btn,
+			.annotation-mobile .annotation-sidebar-inline-btn {
+				min-height: 36px;
+				min-width: 60px;
+				font-size: 14px;
+			}
 		`;
     document.head.appendChild(style);
   }
@@ -873,6 +1229,18 @@ var AnnotationModal = class extends import_obsidian.Modal {
     textarea.addEventListener("input", (e) => {
       this.content = e.target.value;
     });
+    textarea.style.cssText = `
+			width: 100%;
+			min-height: 100px;
+			resize: vertical;
+			border: 1px solid var(--background-modifier-border);
+			border-radius: 4px;
+			padding: 10px;
+			background: var(--background-primary);
+			color: var(--text-normal);
+			font-size: 14px;
+			line-height: 1.5;
+		`;
     const buttonContainer = contentEl.createEl("div", {
       cls: "annotation-button-container"
     });
@@ -896,7 +1264,12 @@ var AnnotationModal = class extends import_obsidian.Modal {
         new import_obsidian.Notice("\u8BF7\u8F93\u5165\u6279\u6CE8\u5185\u5BB9");
       }
     });
-    textarea.focus();
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      }, 150);
+    });
   }
   onClose() {
     const { contentEl } = this;
@@ -990,8 +1363,16 @@ var AnnotationPreviewView = class extends import_obsidian.ItemView {
         text: `"${selectedText}"`
       });
       const commentEl = item.createEl("div", {
-        cls: "annotation-sidebar-comment",
-        text: annotation.content
+        cls: "annotation-sidebar-comment markdown-rendered"
+      });
+      import_obsidian.MarkdownRenderer.render(
+        this.app,
+        annotation.content,
+        commentEl,
+        annotation.sourceFile,
+        this.plugin
+      ).then(() => {
+        this.setupImageHoverPreview(commentEl);
       });
       const actions = item.createEl("div", {
         cls: "annotation-sidebar-actions"
@@ -1003,7 +1384,7 @@ var AnnotationPreviewView = class extends import_obsidian.ItemView {
       editBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
       editBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        this.editAnnotation(annotation);
+        this.enableSidebarInlineEdit(annotation, commentEl, item);
       });
       const fileBtn = actions.createEl("button", {
         cls: "annotation-sidebar-btn",
@@ -1070,7 +1451,7 @@ var AnnotationPreviewView = class extends import_obsidian.ItemView {
         if (!activeView || !activeView.editor)
           return;
         const content = activeView.editor.getValue();
-        const regex = new RegExp(`^id:\\s*${annotationId}$`, "m");
+        const regex = new RegExp(`^id:s*${annotationId}$`, "m");
         const match = content.match(regex);
         if (match && match.index !== void 0) {
           const pos = activeView.editor.offsetToPos(match.index);
@@ -1079,6 +1460,109 @@ var AnnotationPreviewView = class extends import_obsidian.ItemView {
         }
       }, 200);
     }
+  }
+  // 启用侧边栏行内编辑
+  enableSidebarInlineEdit(annotation, commentEl, item) {
+    const originalContent = annotation.content;
+    let isEditing = true;
+    commentEl.empty();
+    commentEl.classList.remove("markdown-rendered");
+    commentEl.classList.add("annotation-inline-edit-container");
+    const textarea = commentEl.createEl("textarea", {
+      cls: "annotation-sidebar-inline-editor"
+    });
+    textarea.value = originalContent;
+    textarea.style.cssText = `
+			width: 100%;
+			min-height: 80px;
+			max-height: 150px;
+			resize: vertical;
+			border: 1px solid var(--background-modifier-border);
+			border-radius: 4px;
+			padding: 6px;
+			background: var(--background-primary);
+			color: var(--text-normal);
+			font-size: 13px;
+			line-height: 1.4;
+		`;
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    const stopPropagation = (e) => {
+      e.stopPropagation();
+    };
+    textarea.addEventListener("click", stopPropagation);
+    textarea.addEventListener("mousedown", stopPropagation);
+    textarea.addEventListener("mouseup", stopPropagation);
+    textarea.addEventListener("selectstart", stopPropagation);
+    commentEl.addEventListener("click", stopPropagation);
+    const cancelEdit = () => {
+      if (!isEditing)
+        return;
+      isEditing = false;
+      textarea.removeEventListener("click", stopPropagation);
+      textarea.removeEventListener("mousedown", stopPropagation);
+      textarea.removeEventListener("mouseup", stopPropagation);
+      textarea.removeEventListener("selectstart", stopPropagation);
+      commentEl.removeEventListener("click", stopPropagation);
+      commentEl.empty();
+      commentEl.classList.remove("annotation-inline-edit-container");
+      commentEl.classList.add("markdown-rendered");
+      import_obsidian.MarkdownRenderer.render(
+        this.app,
+        originalContent,
+        commentEl,
+        annotation.sourceFile,
+        this.plugin
+      ).then(() => {
+        this.setupImageHoverPreview(commentEl);
+      });
+    };
+    const saveEdit = async () => {
+      if (!isEditing)
+        return;
+      isEditing = false;
+      textarea.removeEventListener("click", stopPropagation);
+      textarea.removeEventListener("mousedown", stopPropagation);
+      textarea.removeEventListener("mouseup", stopPropagation);
+      textarea.removeEventListener("selectstart", stopPropagation);
+      commentEl.removeEventListener("click", stopPropagation);
+      const newContent = textarea.value.trim();
+      if (!newContent) {
+        cancelEdit();
+        return;
+      }
+      annotation.content = newContent;
+      await this.plugin.updateAnnotation(annotation);
+      commentEl.empty();
+      commentEl.classList.remove("annotation-inline-edit-container");
+      commentEl.classList.add("markdown-rendered");
+      import_obsidian.MarkdownRenderer.render(
+        this.app,
+        newContent,
+        commentEl,
+        annotation.sourceFile,
+        this.plugin
+      ).then(() => {
+        this.setupImageHoverPreview(commentEl);
+      });
+      this.plugin.forceRefreshHighlights();
+    };
+    textarea.addEventListener("blur", () => {
+      setTimeout(() => {
+        if (isEditing) {
+          saveEdit();
+        }
+      }, 200);
+    });
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cancelEdit();
+      } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        saveEdit();
+      }
+    });
   }
   async editAnnotation(annotation) {
     new AnnotationEditModal(this.app, annotation, async (newContent) => {
@@ -1097,10 +1581,6 @@ var AnnotationPreviewView = class extends import_obsidian.ItemView {
       return;
     try {
       await this.plugin.deleteAnnotation(annotation.id, annotation.sourceFile);
-      document.querySelectorAll(`.annotation-highlight[data-annotation-id="${annotation.id}"]`).forEach((el) => {
-        el.classList.remove("annotation-highlight");
-        el.removeAttribute("data-annotation-id");
-      });
       this.updatePreview();
       this.plugin.forceRefreshHighlights();
       new import_obsidian.Notice("\u6279\u6CE8\u5DF2\u5220\u9664");
@@ -1108,6 +1588,66 @@ var AnnotationPreviewView = class extends import_obsidian.ItemView {
       console.error("\u5220\u9664\u6279\u6CE8\u5931\u8D25:", error);
       new import_obsidian.Notice("\u5220\u9664\u6279\u6CE8\u5931\u8D25");
     }
+  }
+  // 设置图片悬停预览功能
+  setupImageHoverPreview(container) {
+    const images = container.querySelectorAll("img");
+    images.forEach((img) => {
+      var _a;
+      img.style.display = "none";
+      const imgLink = document.createElement("span");
+      imgLink.className = "annotation-image-link";
+      imgLink.textContent = "\u{1F5BC}\uFE0F \u56FE\u7247";
+      imgLink.style.cursor = "pointer";
+      imgLink.style.color = "var(--text-accent)";
+      imgLink.style.textDecoration = "underline";
+      imgLink.style.margin = "0 4px";
+      let previewEl = null;
+      imgLink.addEventListener("mouseenter", (e) => {
+        if (previewEl)
+          return;
+        previewEl = document.createElement("div");
+        previewEl.className = "annotation-image-preview";
+        previewEl.style.cssText = `
+					position: fixed;
+					background: var(--background-primary);
+					border: 1px solid var(--background-modifier-border);
+					border-radius: 6px;
+					padding: 8px;
+					z-index: 10000;
+					box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+					max-width: 300px;
+					max-height: 200px;
+					overflow: hidden;
+				`;
+        const previewImg = document.createElement("img");
+        previewImg.src = img.src;
+        previewImg.style.cssText = `
+					max-width: 100%;
+					max-height: 180px;
+					object-fit: contain;
+					border-radius: 4px;
+				`;
+        previewEl.appendChild(previewImg);
+        const rect = imgLink.getBoundingClientRect();
+        previewEl.style.left = `${rect.left}px`;
+        previewEl.style.top = `${rect.bottom + 5}px`;
+        if (rect.left + 300 > window.innerWidth) {
+          previewEl.style.left = `${window.innerWidth - 320}px`;
+        }
+        if (rect.bottom + 200 > window.innerHeight) {
+          previewEl.style.top = `${rect.top - 210}px`;
+        }
+        document.body.appendChild(previewEl);
+      });
+      imgLink.addEventListener("mouseleave", () => {
+        if (previewEl) {
+          previewEl.remove();
+          previewEl = null;
+        }
+      });
+      (_a = img.parentNode) == null ? void 0 : _a.insertBefore(imgLink, img);
+    });
   }
   async onClose() {
   }
@@ -1185,10 +1725,45 @@ var AnnotationSettingTab = class extends import_obsidian.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "\u6279\u6CE8\u63D2\u4EF6\u8BBE\u7F6E" });
-    new import_obsidian.Setting(containerEl).setName("\u6279\u6CE8\u6587\u4EF6\u5939").setDesc("\u6279\u6CE8\u6587\u4EF6\u5C06\u4FDD\u5B58\u5728\u6B64\u6587\u4EF6\u5939\u4E2D").addText((text) => text.setPlaceholder("Annotations").setValue(this.plugin.settings.annotationFolder).onChange(async (value) => {
-      this.plugin.settings.annotationFolder = value || "Annotations";
-      await this.plugin.saveSettings();
-    }));
+    const folderSetting = new import_obsidian.Setting(containerEl).setName("\u6279\u6CE8\u6587\u4EF6\u5939").setDesc("\u6279\u6CE8\u6587\u4EF6\u5C06\u4FDD\u5B58\u5728\u6B64\u6587\u4EF6\u5939\u4E2D");
+    let folderInput;
+    folderSetting.addText((text) => {
+      text.setPlaceholder("Annotations").setValue(this.plugin.settings.annotationFolder).onChange(async (value) => {
+        let trimmedValue = value.trim();
+        if (trimmedValue) {
+          trimmedValue = trimmedValue.replace(/^[\/\\]+/, "");
+          trimmedValue = trimmedValue.replace(/[\/\\]+$/, "");
+        }
+        if (trimmedValue) {
+          const oldFolder = this.plugin.settings.annotationFolder;
+          this.plugin.settings.annotationFolder = trimmedValue;
+          await this.plugin.saveSettings();
+          if (oldFolder !== trimmedValue) {
+            await this.plugin.loadAnnotations();
+            this.plugin.forceRefreshHighlights();
+            new import_obsidian.Notice(`\u6279\u6CE8\u6587\u4EF6\u5939\u5DF2\u66F4\u6539\u4E3A: ${trimmedValue}`);
+          }
+        }
+      });
+      folderInput = text.inputEl;
+      return text;
+    });
+    folderSetting.addButton((button) => {
+      button.setButtonText("\u9009\u62E9\u6587\u4EF6\u5939").setTooltip("\u6D4F\u89C8\u5E76\u9009\u62E9\u6279\u6CE8\u6587\u4EF6\u5939").onClick(async () => {
+        new FolderSuggestModal(this.app, async (folder) => {
+          const folderPath = folder.path === "/" ? "" : folder.path;
+          this.plugin.settings.annotationFolder = folderPath || "Annotations";
+          await this.plugin.saveSettings();
+          if (folderInput) {
+            folderInput.value = this.plugin.settings.annotationFolder;
+          }
+          await this.plugin.loadAnnotations();
+          this.plugin.forceRefreshHighlights();
+          new import_obsidian.Notice(`\u6279\u6CE8\u6587\u4EF6\u5939\u5DF2\u8BBE\u7F6E\u4E3A: ${this.plugin.settings.annotationFolder}`);
+        }).open();
+      });
+      return button;
+    });
     new import_obsidian.Setting(containerEl).setName("\u9AD8\u4EAE\u989C\u8272").setDesc("\u6279\u6CE8\u6587\u5B57\u7684\u9AD8\u4EAE\u989C\u8272").addColorPicker((color) => color.setValue(this.plugin.settings.highlightColor).onChange(async (value) => {
       this.plugin.settings.highlightColor = value;
       await this.plugin.saveSettings();
@@ -1198,5 +1773,114 @@ var AnnotationSettingTab = class extends import_obsidian.PluginSettingTab {
       await this.plugin.saveSettings();
     }));
     new import_obsidian.Setting(containerEl).setName("\u9884\u89C8\u9762\u677F\u4F4D\u7F6E").setDesc("\u6279\u6CE8\u9884\u89C8\u9762\u677F\u56FA\u5B9A\u5728\u53F3\u4FA7\u529F\u80FD\u533A").addDropdown((dropdown) => dropdown.addOption("right", "\u53F3\u4FA7\u529F\u80FD\u533A").setValue("right").setDisabled(true));
+  }
+};
+var FolderSuggestModal = class extends import_obsidian.Modal {
+  constructor(app, onChoose) {
+    super(app);
+    this.folders = [];
+    this.onChoose = onChoose;
+  }
+  onOpen() {
+    const { contentEl, titleEl } = this;
+    titleEl.setText("\u9009\u62E9\u6279\u6CE8\u6587\u4EF6\u5939");
+    this.folders = this.getAllFolders();
+    const searchContainer = contentEl.createDiv("folder-search-container");
+    const searchInput = searchContainer.createEl("input", {
+      type: "text",
+      placeholder: "\u641C\u7D22\u6587\u4EF6\u5939...",
+      cls: "folder-search-input"
+    });
+    searchInput.style.width = "100%";
+    searchInput.style.marginBottom = "10px";
+    searchInput.style.padding = "5px";
+    const listContainer = contentEl.createDiv("folder-list-container");
+    listContainer.style.maxHeight = "300px";
+    listContainer.style.overflow = "auto";
+    const renderFolders = (filter = "") => {
+      listContainer.empty();
+      const createNewItem = listContainer.createDiv("folder-list-item");
+      createNewItem.style.padding = "8px";
+      createNewItem.style.cursor = "pointer";
+      createNewItem.style.borderBottom = "1px solid var(--background-modifier-border)";
+      createNewItem.style.fontWeight = "bold";
+      createNewItem.style.color = "var(--text-accent)";
+      createNewItem.textContent = filter ? `\u521B\u5EFA\u65B0\u6587\u4EF6\u5939 "${filter}"` : "+ \u521B\u5EFA\u65B0\u6587\u4EF6\u5939";
+      createNewItem.addEventListener("click", async () => {
+        const folderName = filter || "Annotations";
+        try {
+          const newFolder = await this.app.vault.createFolder(folderName);
+          this.onChoose(newFolder);
+          this.close();
+        } catch (error) {
+          new import_obsidian.Notice("\u521B\u5EFA\u6587\u4EF6\u5939\u5931\u8D25\uFF0C\u53EF\u80FD\u5DF2\u5B58\u5728");
+        }
+      });
+      createNewItem.addEventListener("mouseover", () => {
+        createNewItem.style.backgroundColor = "var(--background-modifier-hover)";
+      });
+      createNewItem.addEventListener("mouseout", () => {
+        createNewItem.style.backgroundColor = "";
+      });
+      const filteredFolders = this.folders.filter((folder) => folder.path.toLowerCase().includes(filter.toLowerCase())).sort((a, b) => a.path.localeCompare(b.path));
+      for (const folder of filteredFolders) {
+        const item = listContainer.createDiv("folder-list-item");
+        item.style.padding = "8px";
+        item.style.cursor = "pointer";
+        item.style.borderBottom = "1px solid var(--background-modifier-border)";
+        const folderName = folder.path === "/" ? "\u6839\u76EE\u5F55 (/)" : folder.path;
+        item.textContent = folderName;
+        item.addEventListener("click", () => {
+          this.onChoose(folder);
+          this.close();
+        });
+        item.addEventListener("mouseover", () => {
+          item.style.backgroundColor = "var(--background-modifier-hover)";
+        });
+        item.addEventListener("mouseout", () => {
+          item.style.backgroundColor = "";
+        });
+      }
+      if (filteredFolders.length === 0 && !filter) {
+        const emptyMsg = listContainer.createDiv("folder-list-empty");
+        emptyMsg.textContent = "\u6CA1\u6709\u627E\u5230\u6587\u4EF6\u5939";
+        emptyMsg.style.padding = "20px";
+        emptyMsg.style.textAlign = "center";
+        emptyMsg.style.color = "var(--text-muted)";
+      }
+    };
+    renderFolders();
+    searchInput.addEventListener("input", (e) => {
+      renderFolders(e.target.value);
+    });
+    searchInput.focus();
+    const buttonContainer = contentEl.createDiv("modal-button-container");
+    buttonContainer.style.marginTop = "15px";
+    buttonContainer.style.display = "flex";
+    buttonContainer.style.justifyContent = "flex-end";
+    buttonContainer.style.gap = "10px";
+    const cancelButton = buttonContainer.createEl("button", { text: "\u53D6\u6D88" });
+    cancelButton.addEventListener("click", () => {
+      this.close();
+    });
+  }
+  getAllFolders() {
+    const folders = [];
+    const root = this.app.vault.getRoot();
+    folders.push(root);
+    const traverse = (folder) => {
+      for (const child of folder.children) {
+        if (child instanceof import_obsidian.TFolder) {
+          folders.push(child);
+          traverse(child);
+        }
+      }
+    };
+    traverse(root);
+    return folders;
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
   }
 };

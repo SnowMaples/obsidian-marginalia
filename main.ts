@@ -1,7 +1,7 @@
-import { 
-	Plugin, 
-	PluginSettingTab, 
-	Setting, 
+import {
+	Plugin,
+	PluginSettingTab,
+	Setting,
 	App,
 	Editor,
 	MarkdownView,
@@ -11,20 +11,24 @@ import {
 	TFolder,
 	Notice,
 	WorkspaceLeaf,
-	ItemView
+	ItemView,
+	MarkdownRenderer
 } from 'obsidian';
-import { 
-	Decoration, 
-	DecorationSet, 
-	EditorView, 
-	ViewPlugin, 
+import {
+	Decoration,
+	DecorationSet,
+	EditorView,
+	ViewPlugin,
 	ViewUpdate,
 	WidgetType
 } from '@codemirror/view';
-import { RangeSetBuilder } from '@codemirror/state';
+import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
 
 // 常量定义
 const ANNOTATION_PREVIEW_VIEW_TYPE = 'annotation-preview-view';
+
+// 用于强制刷新高亮的 StateEffect
+const annotationsUpdatedEffect = StateEffect.define<void>();
 
 // 批注数据接口
 interface Annotation {
@@ -59,42 +63,52 @@ export default class AnnotationPlugin extends Plugin {
 	annotations: Map<string, Annotation[]> = new Map();
 	highlightPlugin: ViewPlugin<any> | null = null;
 	activeTooltip: HTMLElement | null = null;
+	isMobile: boolean = false;
+	touchStartTime: number = 0;
+	touchStartPos: { x: number; y: number } = { x: 0, y: 0 };
 
 	async onload() {
 		console.log('加载批注插件');
-		
+
+		// 检测是否为移动端
+		this.isMobile = this.detectMobile();
+		if (this.isMobile) {
+			console.log('检测到移动端设备');
+			document.body.classList.add('annotation-mobile');
+		}
+
 		// 加载设置
 		await this.loadSettings();
-		
+
 		// 注册高亮插件（必须在加载批注数据之前）
 		this.registerHighlightPlugin();
-		
+
 		// 添加设置面板
 		this.addSettingTab(new AnnotationSettingTab(this.app, this));
-		
+
 		// 等待 vault 准备好后再加载批注数据
 		this.app.workspace.onLayoutReady(async () => {
 			console.log('Workspace layout ready, 开始加载批注数据');
 			await this.loadAnnotations();
 			this.refreshHighlights();
-			
-			// 如果有打开的文件，更新批注面板
+
+			// 如果有打开的文件，更新批注面板（移动端不自动开启）
 			const activeFile = this.getActiveFile();
-			if (activeFile) {
+			if (activeFile && !this.isMobile) {
 				this.updateAnnotationPanel();
 			}
 		});
-		
+
 		// 注册右键菜单事件（PC端）
 		this.registerEvent(
 			this.app.workspace.on('editor-menu', this.handleEditorMenu.bind(this))
 		);
-		
+
 		// 注册编辑器变化事件
 		this.registerEvent(
 			this.app.workspace.on('editor-change', this.handleEditorChange.bind(this))
 		);
-		
+
 		// 注册文件打开事件，用于更新高亮和自动显示批注面板
 		this.registerEvent(
 			this.app.workspace.on('file-open', (file) => {
@@ -102,57 +116,65 @@ export default class AnnotationPlugin extends Plugin {
 					// 延迟执行，确保编辑器已准备好
 					setTimeout(() => {
 						this.refreshHighlights();
-						// 自动更新右侧批注面板
-						this.updateAnnotationPanel();
+						// 自动更新右侧批注面板（移动端不自动开启）
+						if (!this.isMobile) {
+							this.updateAnnotationPanel();
+						}
 					}, 100);
 				}
 			})
 		);
-		
-		// 注册编辑器点击事件
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			this.handleEditorClick(evt);
-		});
-		
-		// 注册双击事件（用于显示悬浮提示）
-		this.registerDomEvent(document, 'dblclick', (evt: MouseEvent) => {
-			const target = evt.target as HTMLElement;
-			if (target.classList.contains('annotation-highlight') || 
-			    target.closest('.annotation-highlight')) {
-				evt.preventDefault();
-				evt.stopPropagation();
-				
-				const highlightEl = target.classList.contains('annotation-highlight') 
-					? target 
-					: target.closest('.annotation-highlight') as HTMLElement;
-				const annotationId = highlightEl.getAttribute('data-annotation-id');
-				if (annotationId) {
-					this.showAnnotationTooltip(highlightEl, annotationId);
+
+		// 根据设备类型注册不同的事件
+		if (this.isMobile) {
+			// 移动端：注册触摸事件
+			this.registerMobileEvents();
+		} else {
+			// PC端：注册鼠标点击事件
+			this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
+				this.handleEditorClick(evt);
+			});
+
+			// 注册双击事件（用于显示悬浮提示）
+			this.registerDomEvent(document, 'dblclick', (evt: MouseEvent) => {
+				const target = evt.target as HTMLElement;
+				if (target.classList.contains('annotation-highlight') ||
+					target.closest('.annotation-highlight')) {
+					evt.preventDefault();
+					evt.stopPropagation();
+
+					const highlightEl = target.classList.contains('annotation-highlight')
+						? target
+						: target.closest('.annotation-highlight') as HTMLElement;
+					const annotationId = highlightEl.getAttribute('data-annotation-id');
+					if (annotationId) {
+						this.showAnnotationTooltip(highlightEl, annotationId);
+					}
 				}
-			}
-		});
-		
-		// 点击其他地方关闭悬浮提示
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			const target = evt.target as HTMLElement;
-			// 如果点击的不是 tooltip 内部，则关闭
-			if (!target.closest('.annotation-tooltip') && this.activeTooltip) {
-				this.hideAnnotationTooltip();
-			}
-		});
-		
-		// 注册 Ctrl 键监听（用于鼠标样式变化）
-		this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
-			if (evt.ctrlKey || evt.metaKey) {
-				document.body.classList.add('ctrl-pressed');
-			}
-		});
-		
-		this.registerDomEvent(document, 'keyup', (evt: KeyboardEvent) => {
-			if (!evt.ctrlKey && !evt.metaKey) {
-				document.body.classList.remove('ctrl-pressed');
-			}
-		});
+			});
+
+			// 点击其他地方关闭悬浮提示
+			this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
+				const target = evt.target as HTMLElement;
+				// 如果点击的不是 tooltip 内部，则关闭
+				if (!target.closest('.annotation-tooltip') && this.activeTooltip) {
+					this.hideAnnotationTooltip();
+				}
+			});
+
+			// 注册 Ctrl 键监听（用于鼠标样式变化）
+			this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
+				if (evt.ctrlKey || evt.metaKey) {
+					document.body.classList.add('ctrl-pressed');
+				}
+			});
+
+			this.registerDomEvent(document, 'keyup', (evt: KeyboardEvent) => {
+				if (!evt.ctrlKey && !evt.metaKey) {
+					document.body.classList.remove('ctrl-pressed');
+				}
+			});
+		}
 		
 		// 添加命令
 		this.addCommand({
@@ -248,62 +270,92 @@ export default class AnnotationPlugin extends Plugin {
 			return;
 		}
 
-		// 打开批注编辑弹窗
-		new AnnotationModal(this.app, selection, async (content: string) => {
-			const annotation: Annotation = {
-				id: this.generateId(),
-				sourceFile: sourceFile,
-				startOffset: startOffset,
-				endOffset: endOffset,
-				selectedText: selection,
-				content: content,
-				createdAt: Date.now(),
-				updatedAt: Date.now()
-			};
+		// 先关闭任何可能打开的 tooltip，避免焦点冲突
+		this.hideAnnotationTooltip();
 
-			await this.saveAnnotation(annotation);
-			
-			// 使用延迟确保 DOM 更新后再刷新高亮
-			setTimeout(() => {
-				this.forceRefreshHighlights();
-			}, 50);
-			
-			// 更新侧边栏
-			await this.updateAnnotationPanel();
-			
-			new Notice('批注已保存');
-		}).open();
+		// 短暂延迟确保 tooltip 完全关闭，再打开 Modal
+		setTimeout(() => {
+			// 打开批注编辑弹窗
+			new AnnotationModal(this.app, selection, async (content: string) => {
+				const annotation: Annotation = {
+					id: this.generateId(),
+					sourceFile: sourceFile,
+					startOffset: startOffset,
+					endOffset: endOffset,
+					selectedText: selection,
+					content: content,
+					createdAt: Date.now(),
+					updatedAt: Date.now()
+				};
+
+				await this.saveAnnotation(annotation);
+				
+				// 使用延迟确保 DOM 更新后再刷新高亮
+				setTimeout(() => {
+					this.forceRefreshHighlights();
+				}, 50);
+				
+				// 更新侧边栏
+				await this.updateAnnotationPanel();
+				
+				new Notice('批注已保存');
+			}).open();
+		}, 50);
 	}
 
 	// 保存批注
 	async saveAnnotation(annotation: Annotation) {
 		// 确保批注文件夹存在
 		await this.ensureAnnotationFolder();
-		
+
 		// 获取或创建批注文件
 		const annotationFilePath = this.getAnnotationFilePath(annotation.sourceFile);
 		let existingAnnotations: Annotation[] = [];
-		
+		let fileExists = false;
+
 		try {
 			const file = this.app.vault.getAbstractFileByPath(annotationFilePath);
 			if (file instanceof TFile) {
-				const content = await this.app.vault.read(file);
-				existingAnnotations = this.parseAnnotationFile(content);
+				// 验证文件是否真的存在（未被删除）
+				try {
+					const content = await this.app.vault.read(file);
+					// 即使文件内容为空或解析失败，也视为文件存在
+					existingAnnotations = this.parseAnnotationFile(content) || [];
+					fileExists = true;
+				} catch (readError) {
+					// 文件可能已被删除但缓存未更新
+					fileExists = false;
+					existingAnnotations = [];
+				}
 			}
 		} catch (e) {
 			// 文件不存在，将创建新文件
+			fileExists = false;
 		}
 
 		// 添加新批注
 		existingAnnotations.push(annotation);
-		
+
 		// 保存文件
 		const fileContent = this.formatAnnotationFile(existingAnnotations, annotation.sourceFile);
-		const file = this.app.vault.getAbstractFileByPath(annotationFilePath);
-		if (file instanceof TFile) {
-			await this.app.vault.modify(file, fileContent);
-		} else {
-			await this.app.vault.create(annotationFilePath, fileContent);
+
+		try {
+			if (fileExists) {
+				// 文件存在，使用 modify
+				const file = this.app.vault.getAbstractFileByPath(annotationFilePath);
+				if (file instanceof TFile) {
+					await this.app.vault.modify(file, fileContent);
+				} else {
+					// 文件突然不存在了，创建新文件
+					await this.app.vault.create(annotationFilePath, fileContent);
+				}
+			} else {
+				// 文件不存在，创建新文件
+				await this.app.vault.create(annotationFilePath, fileContent);
+			}
+		} catch (writeError) {
+			console.error('保存批注文件失败:', writeError);
+			throw new Error('保存批注失败: ' + (writeError as Error).message);
 		}
 
 		// 更新内存中的批注列表
@@ -312,6 +364,9 @@ export default class AnnotationPlugin extends Plugin {
 
 	// 加载批注
 	async loadAnnotations() {
+		// 先清空现有的批注数据，确保重新加载时数据是最新的
+		this.annotations.clear();
+		
 		const folder = this.app.vault.getAbstractFileByPath(this.settings.annotationFolder);
 		if (folder instanceof TFolder) {
 			for (const file of folder.children) {
@@ -438,29 +493,28 @@ export default class AnnotationPlugin extends Plugin {
 	async deleteAnnotation(annotationId: string, sourceFile: string): Promise<void> {
 		const annotationFilePath = this.getAnnotationFilePath(sourceFile);
 		const file = this.app.vault.getAbstractFileByPath(annotationFilePath);
-		
+
 		if (!(file instanceof TFile)) {
 			throw new Error('批注文件不存在');
 		}
-		
+
 		// 读取现有批注
 		const content = await this.app.vault.read(file);
 		let annotations = this.parseAnnotationFile(content);
-		
+
 		// 过滤掉要删除的批注
 		annotations = annotations.filter(a => a.id !== annotationId);
-		
-		if (annotations.length === 0) {
-			// 如果没有批注了，删除整个文件
-			await this.app.vault.delete(file);
-		} else {
-			// 保存更新后的文件
-			const fileContent = this.formatAnnotationFile(annotations, sourceFile);
-			await this.app.vault.modify(file, fileContent);
-		}
+
+		// 保存更新后的文件（即使为空也保留文件，避免后续添加批注时出现问题）
+		const fileContent = this.formatAnnotationFile(annotations, sourceFile);
+		await this.app.vault.modify(file, fileContent);
 		
 		// 更新内存中的批注列表
-		this.annotations.set(sourceFile, annotations);
+		if (annotations.length === 0) {
+			this.annotations.delete(sourceFile);
+		} else {
+			this.annotations.set(sourceFile, annotations);
+		}
 	}
 
 	// 格式化批注文件
@@ -508,27 +562,53 @@ export default class AnnotationPlugin extends Plugin {
 
 	// 确保批注文件夹存在
 	async ensureAnnotationFolder() {
-		const folder = this.app.vault.getAbstractFileByPath(this.settings.annotationFolder);
-		if (!folder) {
-			await this.app.vault.createFolder(this.settings.annotationFolder);
+		try {
+			const folder = this.app.vault.getAbstractFileByPath(this.settings.annotationFolder);
+			if (!folder) {
+				await this.app.vault.createFolder(this.settings.annotationFolder);
+			}
+		} catch (error) {
+			// 如果文件夹已存在，忽略错误
+			if (!(error as Error).message?.includes('already exists')) {
+				throw error;
+			}
 		}
 	}
 
 	// 注册高亮插件
 	registerHighlightPlugin() {
 		const plugin = this;
-		
+
+		// 创建一个 StateField 来追踪批注更新
+		const annotationsField = StateField.define<number>({
+			create() {
+				return 0;
+			},
+			update(value, tr) {
+				for (const effect of tr.effects) {
+					if (effect.is(annotationsUpdatedEffect)) {
+						return value + 1;
+					}
+				}
+				return value;
+			}
+		});
+
 		this.highlightPlugin = ViewPlugin.fromClass(
 			class {
 				decorations: DecorationSet;
-				
+				lastUpdateCount: number = 0;
+
 				constructor(view: EditorView) {
 					this.decorations = plugin.buildDecorations(view);
 				}
-				
+
 				update(update: ViewUpdate) {
-					if (update.docChanged || update.viewportChanged) {
+					const currentCount = update.state.field(annotationsField);
+					// 当文档变化、视口变化或批注数据更新时重新构建装饰器
+					if (update.docChanged || update.viewportChanged || currentCount !== this.lastUpdateCount) {
 						this.decorations = plugin.buildDecorations(update.view);
+						this.lastUpdateCount = currentCount;
 					}
 				}
 			},
@@ -536,8 +616,8 @@ export default class AnnotationPlugin extends Plugin {
 				decorations: (v) => v.decorations,
 			}
 		);
-		
-		this.registerEditorExtension(this.highlightPlugin);
+
+		this.registerEditorExtension([annotationsField, this.highlightPlugin]);
 	}
 	
 	// 构建装饰器
@@ -604,7 +684,6 @@ export default class AnnotationPlugin extends Plugin {
 		if (!file) return;
 
 		const annotations = this.annotations.get(file.path) || [];
-		console.log('更新高亮:', file.path, annotations.length, '个批注');
 		
 		// 触发编辑器重绘以应用新的装饰器
 		const editorView = (view.editor as any).cm as EditorView;
@@ -620,24 +699,29 @@ export default class AnnotationPlugin extends Plugin {
 	forceRefreshHighlights() {
 		// 获取所有 MarkdownView 并更新高亮
 		const leaves = this.app.workspace.getLeavesOfType('markdown');
+		
 		for (const leaf of leaves) {
 			const view = leaf.view as MarkdownView;
 			if (view && view.file && view.editor) {
 				const editorView = (view.editor as any).cm as EditorView;
 				if (editorView) {
-					// 触发强制重绘
-					editorView.dispatch({ effects: [] });
+					// 使用 StateEffect 触发重新构建装饰器
+					editorView.dispatch({
+						effects: annotationsUpdatedEffect.of()
+					});
 				}
 			}
 		}
-		
+
 		// 如果没有找到 leaves，尝试获取当前激活的视图
 		if (leaves.length === 0) {
 			const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 			if (activeView && activeView.editor) {
 				const editorView = (activeView.editor as any).cm as EditorView;
 				if (editorView) {
-					editorView.dispatch({ effects: [] });
+					editorView.dispatch({
+						effects: annotationsUpdatedEffect.of()
+					});
 				}
 			}
 		}
@@ -793,10 +877,21 @@ export default class AnnotationPlugin extends Plugin {
 		const contentContainer = tooltip.createEl('div', {
 			cls: 'annotation-tooltip-content-container'
 		});
-		
+
 		const contentEl = contentContainer.createEl('div', {
-			cls: 'annotation-tooltip-content',
-			text: annotation.content
+			cls: 'annotation-tooltip-content markdown-rendered'
+		});
+
+		// 使用 MarkdownRenderer 渲染批注内容
+		MarkdownRenderer.render(
+			this.app,
+			annotation.content,
+			contentEl,
+			annotation.sourceFile,
+			this
+		).then(() => {
+			// 渲染完成后，为图片添加悬停预览功能
+			this.setupImageHoverPreview(contentEl);
 		});
 		
 		// 底部栏（时间和按钮组）
@@ -825,17 +920,8 @@ export default class AnnotationPlugin extends Plugin {
 		editBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
 		editBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
-			this.hideAnnotationTooltip();
-			// 打开编辑弹窗
-			new AnnotationEditModal(this.app, annotation, async (newContent: string) => {
-				annotation.content = newContent;
-				await this.updateAnnotation(annotation);
-				// 刷新侧边栏
-				this.updateAnnotationPanel();
-				// 刷新高亮
-				this.forceRefreshHighlights();
-				new Notice('批注已更新');
-			}).open();
+			// 在当前 tooltip 中进行行内编辑
+			this.enableInlineEdit(tooltip, annotation, contentEl, contentContainer);
 		});
 		
 		// 删除按钮（图标）
@@ -844,43 +930,61 @@ export default class AnnotationPlugin extends Plugin {
 			attr: { 'aria-label': '删除批注' }
 		});
 		deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>';
-		deleteBtn.addEventListener('click', (e) => {
+		deleteBtn.addEventListener('click', async (e) => {
 			e.stopPropagation();
-			this.hideAnnotationTooltip();
-			// 调用删除方法
-			const plugin = this;
-			plugin.deleteAnnotation(annotation.id, annotation.sourceFile).then(() => {
-				// 移除正文中的高亮效果
-				document.querySelectorAll(`.annotation-highlight[data-annotation-id="${annotation.id}"]`).forEach((el) => {
-					el.classList.remove('annotation-highlight');
-					el.removeAttribute('data-annotation-id');
-				});
+			
+			// 先完全清理 tooltip，避免焦点问题
+			if (this.activeTooltip) {
+				const tooltipToRemove = this.activeTooltip;
+				this.activeTooltip = null;
+				tooltipToRemove.remove();
+			}
+			
+			try {
+				// 调用删除方法（已经更新了 this.annotations）
+				await this.deleteAnnotation(annotation.id, annotation.sourceFile);
+				
 				// 刷新侧边栏
-				plugin.updateAnnotationPanel();
-				// 刷新高亮
-				plugin.forceRefreshHighlights();
+				this.updateAnnotationPanel();
+				
+				// 强制刷新高亮（让 Codemirror 重新渲染）
+				this.forceRefreshHighlights();
+				
 				new Notice('批注已删除');
-			}).catch((error: Error) => {
+			} catch (error) {
 				console.error('删除批注失败:', error);
 				new Notice('删除批注失败');
-			});
+			}
 		});
 		
 		// 定位
-		const rect = element.getBoundingClientRect();
-		tooltip.style.left = `${rect.left}px`;
-		tooltip.style.top = `${rect.bottom + 5}px`;
-		
-		// 检查是否超出屏幕右侧
-		if (rect.left + 300 > window.innerWidth) {
-			tooltip.style.left = `${window.innerWidth - 320}px`;
+		if (this.isMobile) {
+			// 移动端：居中显示在屏幕底部
+			tooltip.style.position = 'fixed';
+			tooltip.style.left = '50%';
+			tooltip.style.transform = 'translateX(-50%)';
+			tooltip.style.bottom = '20px';
+			tooltip.style.top = 'auto';
+			tooltip.style.maxWidth = '90vw';
+			tooltip.style.width = '90vw';
+			tooltip.style.maxHeight = '60vh';
+		} else {
+			// PC端：根据元素位置定位
+			const rect = element.getBoundingClientRect();
+			tooltip.style.left = `${rect.left}px`;
+			tooltip.style.top = `${rect.bottom + 5}px`;
+
+			// 检查是否超出屏幕右侧
+			if (rect.left + 300 > window.innerWidth) {
+				tooltip.style.left = `${window.innerWidth - 320}px`;
+			}
+
+			// 检查是否超出屏幕底部
+			if (rect.bottom + 250 > window.innerHeight) {
+				tooltip.style.top = `${rect.top - 260}px`;
+			}
 		}
-		
-		// 检查是否超出屏幕底部
-		if (rect.bottom + 250 > window.innerHeight) {
-			tooltip.style.top = `${rect.top - 260}px`;
-		}
-		
+
 		document.body.appendChild(tooltip);
 		this.activeTooltip = tooltip;
 	}
@@ -892,7 +996,309 @@ export default class AnnotationPlugin extends Plugin {
 			this.activeTooltip = null;
 		}
 	}
-	
+
+	// 启用行内编辑模式
+	enableInlineEdit(tooltip: HTMLElement, annotation: Annotation, contentEl: HTMLElement, contentContainer: HTMLElement) {
+		// 保存原始内容用于取消操作
+		const originalContent = annotation.content;
+		let isEditing = true;
+
+		// 清空内容容器
+		contentContainer.empty();
+
+		// 创建文本编辑区域
+		const textarea = contentContainer.createEl('textarea', {
+			cls: 'annotation-inline-editor'
+		});
+		textarea.value = originalContent;
+		textarea.style.cssText = `
+			width: 100%;
+			min-height: 100px;
+			max-height: 200px;
+			resize: vertical;
+			border: 1px solid var(--background-modifier-border);
+			border-radius: 4px;
+			padding: 8px;
+			background: var(--background-primary);
+			color: var(--text-normal);
+			font-size: 14px;
+			line-height: 1.5;
+		`;
+
+		// 聚焦文本框，但不全选（方便调整光标位置）
+		textarea.focus();
+		// 将光标移到末尾
+		textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+		// 阻止编辑区域内的点击事件冒泡（防止关闭tooltip）
+		const stopPropagation = (e: Event) => {
+			e.stopPropagation();
+		};
+		textarea.addEventListener('click', stopPropagation);
+		textarea.addEventListener('mousedown', stopPropagation);
+		textarea.addEventListener('mouseup', stopPropagation);
+		contentContainer.addEventListener('click', stopPropagation);
+
+		// 取消编辑（恢复原始内容）
+		const cancelEdit = () => {
+			if (!isEditing) return;
+			isEditing = false;
+
+			// 移除事件监听
+			textarea.removeEventListener('click', stopPropagation);
+			textarea.removeEventListener('mousedown', stopPropagation);
+			textarea.removeEventListener('mouseup', stopPropagation);
+			contentContainer.removeEventListener('click', stopPropagation);
+
+			// 重新渲染原始内容
+			contentContainer.empty();
+			const newContentEl = contentContainer.createEl('div', {
+				cls: 'annotation-tooltip-content markdown-rendered'
+			});
+			MarkdownRenderer.render(
+				this.app,
+				originalContent,
+				newContentEl,
+				annotation.sourceFile,
+				this
+			).then(() => {
+				this.setupImageHoverPreview(newContentEl);
+			});
+		};
+
+		// 保存编辑
+		const saveEdit = async () => {
+			if (!isEditing) return;
+			isEditing = false;
+
+			// 移除事件监听
+			textarea.removeEventListener('click', stopPropagation);
+			textarea.removeEventListener('mousedown', stopPropagation);
+			textarea.removeEventListener('mouseup', stopPropagation);
+			contentContainer.removeEventListener('click', stopPropagation);
+
+			const newContent = textarea.value.trim();
+			if (!newContent) {
+				// 内容为空则取消编辑
+				cancelEdit();
+				return;
+			}
+
+			annotation.content = newContent;
+			await this.updateAnnotation(annotation);
+
+			// 重新渲染更新后的内容
+			contentContainer.empty();
+			const newContentEl = contentContainer.createEl('div', {
+				cls: 'annotation-tooltip-content markdown-rendered'
+			});
+			MarkdownRenderer.render(
+				this.app,
+				newContent,
+				newContentEl,
+				annotation.sourceFile,
+				this
+			).then(() => {
+				this.setupImageHoverPreview(newContentEl);
+			});
+
+			// 刷新侧边栏
+			this.updateAnnotationPanel();
+			// 刷新高亮
+			this.forceRefreshHighlights();
+		};
+
+		// 失焦时自动保存
+		textarea.addEventListener('blur', () => {
+			// 延迟保存，避免在点击其他元素时立即保存导致问题
+			setTimeout(() => {
+				if (isEditing) {
+					saveEdit();
+				}
+			}, 200);
+		});
+
+		// 键盘快捷键
+		textarea.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				cancelEdit();
+			} else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+				e.preventDefault();
+				saveEdit();
+			}
+		});
+	}
+
+	// 设置图片悬停预览功能
+	setupImageHoverPreview(container: HTMLElement) {
+		const images = container.querySelectorAll('img');
+		images.forEach(img => {
+			// 隐藏图片，只显示占位符链接
+			img.style.display = 'none';
+
+			// 创建图片链接元素
+			const imgLink = document.createElement('span');
+			imgLink.className = 'annotation-image-link';
+			imgLink.textContent = '🖼️ 图片';
+			imgLink.style.cursor = 'pointer';
+			imgLink.style.color = 'var(--text-accent)';
+			imgLink.style.textDecoration = 'underline';
+			imgLink.style.margin = '0 4px';
+
+			// 创建预览小窗
+			let previewEl: HTMLElement | null = null;
+
+			imgLink.addEventListener('mouseenter', (e) => {
+				if (previewEl) return;
+
+				previewEl = document.createElement('div');
+				previewEl.className = 'annotation-image-preview';
+				previewEl.style.cssText = `
+					position: fixed;
+					background: var(--background-primary);
+					border: 1px solid var(--background-modifier-border);
+					border-radius: 6px;
+					padding: 8px;
+					z-index: 10000;
+					box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+					max-width: 300px;
+					max-height: 200px;
+					overflow: hidden;
+				`;
+
+				const previewImg = document.createElement('img');
+				previewImg.src = img.src;
+				previewImg.style.cssText = `
+					max-width: 100%;
+					max-height: 180px;
+					object-fit: contain;
+					border-radius: 4px;
+				`;
+
+				previewEl.appendChild(previewImg);
+
+				// 定位预览窗口
+				const rect = imgLink.getBoundingClientRect();
+				previewEl.style.left = `${rect.left}px`;
+				previewEl.style.top = `${rect.bottom + 5}px`;
+
+				// 检查是否超出屏幕
+				if (rect.left + 300 > window.innerWidth) {
+					previewEl.style.left = `${window.innerWidth - 320}px`;
+				}
+				if (rect.bottom + 200 > window.innerHeight) {
+					previewEl.style.top = `${rect.top - 210}px`;
+				}
+
+				document.body.appendChild(previewEl);
+			});
+
+			imgLink.addEventListener('mouseleave', () => {
+				if (previewEl) {
+					previewEl.remove();
+					previewEl = null;
+				}
+			});
+
+			// 替换图片为链接
+			img.parentNode?.insertBefore(imgLink, img);
+		});
+	}
+
+	// 检测是否为移动端设备
+	detectMobile(): boolean {
+		// 检测触摸设备
+		const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+		// 检测屏幕宽度
+		const isSmallScreen = window.innerWidth <= 768;
+		// 检测移动端 User Agent
+		const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+		const isMobileUA = mobileRegex.test(navigator.userAgent);
+
+		return (isTouchDevice && isSmallScreen) || isMobileUA;
+	}
+
+	// 注册移动端事件
+	registerMobileEvents() {
+		// 双击显示批注详情（移动端主要交互方式）
+		this.registerDomEvent(document, 'touchend', (evt: TouchEvent) => {
+			const touch = evt.changedTouches[0];
+			const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+
+			if (target && (target.classList.contains('annotation-highlight') ||
+				target.closest('.annotation-highlight'))) {
+				const now = Date.now();
+				const timeDiff = now - this.touchStartTime;
+
+				// 双击检测（300ms 内的两次点击）
+				if (timeDiff < 300) {
+					evt.preventDefault();
+					evt.stopPropagation();
+
+					const highlightEl = target.classList.contains('annotation-highlight')
+						? target
+						: target.closest('.annotation-highlight') as HTMLElement;
+					const annotationId = highlightEl.getAttribute('data-annotation-id');
+					if (annotationId) {
+						this.showAnnotationTooltip(highlightEl, annotationId);
+					}
+				}
+
+				this.touchStartTime = now;
+			}
+		});
+
+		// 记录触摸开始时间和位置
+		this.registerDomEvent(document, 'touchstart', (evt: TouchEvent) => {
+			const touch = evt.touches[0];
+			this.touchStartPos = { x: touch.clientX, y: touch.clientY };
+		});
+
+		// 长按显示批注（作为双击的替代方案）
+		let longPressTimer: number | null = null;
+		this.registerDomEvent(document, 'touchstart', (evt: TouchEvent) => {
+			const touch = evt.touches[0];
+			const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+
+			if (target && (target.classList.contains('annotation-highlight') ||
+				target.closest('.annotation-highlight'))) {
+				longPressTimer = window.setTimeout(() => {
+					const highlightEl = target.classList.contains('annotation-highlight')
+						? target
+						: target.closest('.annotation-highlight') as HTMLElement;
+					const annotationId = highlightEl.getAttribute('data-annotation-id');
+					if (annotationId) {
+						this.showAnnotationTooltip(highlightEl, annotationId);
+					}
+				}, 500); // 500ms 长按
+			}
+		});
+
+		this.registerDomEvent(document, 'touchend', () => {
+			if (longPressTimer) {
+				clearTimeout(longPressTimer);
+				longPressTimer = null;
+			}
+		});
+
+		this.registerDomEvent(document, 'touchmove', () => {
+			if (longPressTimer) {
+				clearTimeout(longPressTimer);
+				longPressTimer = null;
+			}
+		});
+
+		// 点击其他地方关闭悬浮提示
+		this.registerDomEvent(document, 'touchstart', (evt: TouchEvent) => {
+			const touch = evt.touches[0];
+			const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+			if (this.activeTooltip && !target?.closest('.annotation-tooltip')) {
+				this.hideAnnotationTooltip();
+			}
+		});
+	}
+
 	// 切换批注预览面板（功能区样式）
 	async toggleAnnotationPreview() {
 		const { workspace } = this.app;
@@ -941,9 +1347,14 @@ export default class AnnotationPlugin extends Plugin {
 	
 	// 更新批注面板（自动显示）- 避免重复创建
 	async updateAnnotationPanel() {
+		// 移动端不自动开启侧边栏
+		if (this.isMobile) {
+			return;
+		}
+
 		const { workspace } = this.app;
 		const existing = workspace.getLeavesOfType(ANNOTATION_PREVIEW_VIEW_TYPE);
-		
+
 		// 如果面板已存在，只更新内容，不重新创建
 		if (existing.length > 0) {
 			// 通知所有面板更新
@@ -1092,6 +1503,58 @@ export default class AnnotationPlugin extends Plugin {
 			.annotation-highlight:hover {
 				background-color: var(--annotation-highlight-hover-color, #fdd835);
 			}
+			
+			/* 移动端适配样式 */
+			.annotation-mobile .annotation-highlight {
+				cursor: default;
+			}
+			
+			/* 移动端 tooltip 样式优化 */
+			.annotation-mobile .annotation-tooltip {
+				position: fixed;
+				left: 50% !important;
+				transform: translateX(-50%);
+				max-width: 90vw;
+				width: 90vw;
+				max-height: 60vh;
+			}
+			
+			/* 移动端行内编辑器优化 */
+			.annotation-mobile .annotation-inline-editor {
+				font-size: 16px !important; /* 防止 iOS 缩放 */
+				min-height: 120px;
+			}
+			
+			/* 移动端侧边栏隐藏 */
+			.annotation-mobile .annotation-word-sidebar {
+				display: none !important;
+			}
+			
+			/* 触摸反馈 */
+			.annotation-mobile .annotation-highlight:active {
+				background-color: var(--annotation-highlight-hover-color, #fdd835);
+				opacity: 0.8;
+			}
+			
+			/* 移动端操作按钮优化 */
+			.annotation-mobile .annotation-tooltip-btn {
+				min-width: 44px;
+				min-height: 44px;
+				font-size: 16px;
+			}
+			
+			/* 移动端按钮容器优化 */
+			.annotation-mobile .annotation-inline-edit-buttons,
+			.annotation-mobile .annotation-sidebar-inline-edit-buttons {
+				padding: 8px 0;
+			}
+			
+			.annotation-mobile .annotation-inline-btn,
+			.annotation-mobile .annotation-sidebar-inline-btn {
+				min-height: 36px;
+				min-width: 60px;
+				font-size: 14px;
+			}
 		`;
 		document.head.appendChild(style);
 	}
@@ -1162,7 +1625,21 @@ class AnnotationModal extends Modal {
 		textarea.addEventListener('input', (e) => {
 			this.content = (e.target as HTMLTextAreaElement).value;
 		});
-		
+
+		// 确保文本框可以正常输入
+		textarea.style.cssText = `
+			width: 100%;
+			min-height: 100px;
+			resize: vertical;
+			border: 1px solid var(--background-modifier-border);
+			border-radius: 4px;
+			padding: 10px;
+			background: var(--background-primary);
+			color: var(--text-normal);
+			font-size: 14px;
+			line-height: 1.5;
+		`;
+
 		// 按钮容器
 		const buttonContainer = contentEl.createEl('div', {
 			cls: 'annotation-button-container'
@@ -1171,15 +1648,15 @@ class AnnotationModal extends Modal {
 		buttonContainer.style.display = 'flex';
 		buttonContainer.style.gap = '10px';
 		buttonContainer.style.justifyContent = 'flex-end';
-		
+
 		// 取消按钮
 		const cancelButton = buttonContainer.createEl('button', { text: '取消' });
 		cancelButton.addEventListener('click', () => {
 			this.close();
 		});
-		
+
 		// 保存按钮
-		const saveButton = buttonContainer.createEl('button', { 
+		const saveButton = buttonContainer.createEl('button', {
 			text: '保存',
 			cls: 'mod-cta'
 		});
@@ -1191,9 +1668,15 @@ class AnnotationModal extends Modal {
 				new Notice('请输入批注内容');
 			}
 		});
-		
-		// 聚焦到文本框
-		textarea.focus();
+
+		// 使用 requestAnimationFrame 和 setTimeout 确保 Modal 完全渲染后再聚焦
+		requestAnimationFrame(() => {
+			setTimeout(() => {
+				textarea.focus();
+				// 确保光标在文本末尾
+				textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+			}, 150);
+		});
 	}
 
 	onClose() {
@@ -1329,10 +1812,21 @@ class AnnotationPreviewView extends ItemView {
 				text: `"${selectedText}"`
 			});
 			
-			// 批注内容（自适应高度）
+			// 批注内容（自适应高度，支持Markdown）
 			const commentEl = item.createEl('div', {
-				cls: 'annotation-sidebar-comment',
-				text: annotation.content
+				cls: 'annotation-sidebar-comment markdown-rendered'
+			});
+
+			// 使用 MarkdownRenderer 渲染批注内容
+			MarkdownRenderer.render(
+				this.app,
+				annotation.content,
+				commentEl,
+				annotation.sourceFile,
+				this.plugin
+			).then(() => {
+				// 渲染完成后，为图片添加悬停预览功能
+				this.setupImageHoverPreview(commentEl);
 			});
 			
 			// 操作按钮区域
@@ -1348,7 +1842,8 @@ class AnnotationPreviewView extends ItemView {
 			editBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
 			editBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
-				this.editAnnotation(annotation);
+				// 在当前位置启用行内编辑
+				this.enableSidebarInlineEdit(annotation, commentEl, item);
 			});
 			
 			// 打开批注文件按钮
@@ -1431,7 +1926,7 @@ class AnnotationPreviewView extends ItemView {
 				if (!activeView || !activeView.editor) return;
 				
 				const content = activeView.editor.getValue();
-				const regex = new RegExp(`^id:\\s*${annotationId}$`, 'm');
+				const regex = new RegExp(`^id:\s*${annotationId}$`, 'm');
 				const match = content.match(regex);
 				
 				if (match && match.index !== undefined) {
@@ -1441,6 +1936,141 @@ class AnnotationPreviewView extends ItemView {
 				}
 			}, 200);
 		}
+	}
+	
+	// 启用侧边栏行内编辑
+	enableSidebarInlineEdit(annotation: Annotation, commentEl: HTMLElement, item: HTMLElement) {
+		// 保存原始内容
+		const originalContent = annotation.content;
+		let isEditing = true;
+
+		// 清空内容区域
+		commentEl.empty();
+		commentEl.classList.remove('markdown-rendered');
+		commentEl.classList.add('annotation-inline-edit-container');
+
+		// 创建文本编辑区域
+		const textarea = commentEl.createEl('textarea', {
+			cls: 'annotation-sidebar-inline-editor'
+		});
+		textarea.value = originalContent;
+		textarea.style.cssText = `
+			width: 100%;
+			min-height: 80px;
+			max-height: 150px;
+			resize: vertical;
+			border: 1px solid var(--background-modifier-border);
+			border-radius: 4px;
+			padding: 6px;
+			background: var(--background-primary);
+			color: var(--text-normal);
+			font-size: 13px;
+			line-height: 1.4;
+		`;
+
+		// 聚焦文本框，将光标移到末尾
+		textarea.focus();
+		textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+		// 阻止编辑区域内的点击和选择事件冒泡（防止触发其他操作）
+		const stopPropagation = (e: Event) => {
+			e.stopPropagation();
+		};
+		textarea.addEventListener('click', stopPropagation);
+		textarea.addEventListener('mousedown', stopPropagation);
+		textarea.addEventListener('mouseup', stopPropagation);
+		textarea.addEventListener('selectstart', stopPropagation);
+		commentEl.addEventListener('click', stopPropagation);
+
+		// 取消编辑
+		const cancelEdit = () => {
+			if (!isEditing) return;
+			isEditing = false;
+
+			// 移除事件监听
+			textarea.removeEventListener('click', stopPropagation);
+			textarea.removeEventListener('mousedown', stopPropagation);
+			textarea.removeEventListener('mouseup', stopPropagation);
+			textarea.removeEventListener('selectstart', stopPropagation);
+			commentEl.removeEventListener('click', stopPropagation);
+
+			commentEl.empty();
+			commentEl.classList.remove('annotation-inline-edit-container');
+			commentEl.classList.add('markdown-rendered');
+
+			// 重新渲染原始内容
+			MarkdownRenderer.render(
+				this.app,
+				originalContent,
+				commentEl,
+				annotation.sourceFile,
+				this.plugin
+			).then(() => {
+				this.setupImageHoverPreview(commentEl);
+			});
+		};
+
+		// 保存编辑
+		const saveEdit = async () => {
+			if (!isEditing) return;
+			isEditing = false;
+
+			// 移除事件监听
+			textarea.removeEventListener('click', stopPropagation);
+			textarea.removeEventListener('mousedown', stopPropagation);
+			textarea.removeEventListener('mouseup', stopPropagation);
+			textarea.removeEventListener('selectstart', stopPropagation);
+			commentEl.removeEventListener('click', stopPropagation);
+
+			const newContent = textarea.value.trim();
+			if (!newContent) {
+				// 内容为空则取消编辑
+				cancelEdit();
+				return;
+			}
+
+			annotation.content = newContent;
+			await this.plugin.updateAnnotation(annotation);
+
+			commentEl.empty();
+			commentEl.classList.remove('annotation-inline-edit-container');
+			commentEl.classList.add('markdown-rendered');
+
+			// 重新渲染更新后的内容
+			MarkdownRenderer.render(
+				this.app,
+				newContent,
+				commentEl,
+				annotation.sourceFile,
+				this.plugin
+			).then(() => {
+				this.setupImageHoverPreview(commentEl);
+			});
+
+			// 刷新高亮
+			this.plugin.forceRefreshHighlights();
+		};
+
+		// 失焦时自动保存
+		textarea.addEventListener('blur', () => {
+			// 延迟保存，避免在点击其他元素时立即保存导致问题
+			setTimeout(() => {
+				if (isEditing) {
+					saveEdit();
+				}
+			}, 200);
+		});
+
+		// 键盘快捷键
+		textarea.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				cancelEdit();
+			} else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+				e.preventDefault();
+				saveEdit();
+			}
+		});
 	}
 	
 	async editAnnotation(annotation: Annotation) {
@@ -1466,19 +2096,13 @@ class AnnotationPreviewView extends ItemView {
 		if (!confirmDelete) return;
 		
 		try {
-			// 删除批注
+			// 删除批注（已经更新了 this.plugin.annotations）
 			await this.plugin.deleteAnnotation(annotation.id, annotation.sourceFile);
-			
-			// 移除正文中的高亮效果
-			document.querySelectorAll(`.annotation-highlight[data-annotation-id="${annotation.id}"]`).forEach((el) => {
-				el.classList.remove('annotation-highlight');
-				el.removeAttribute('data-annotation-id');
-			});
 			
 			// 刷新右侧边栏
 			this.updatePreview();
 			
-			// 强制刷新高亮
+			// 强制刷新高亮（让 Codemirror 重新渲染所有高亮）
 			this.plugin.forceRefreshHighlights();
 			
 			new Notice('批注已删除');
@@ -1486,6 +2110,82 @@ class AnnotationPreviewView extends ItemView {
 			console.error('删除批注失败:', error);
 			new Notice('删除批注失败');
 		}
+	}
+
+	// 设置图片悬停预览功能
+	setupImageHoverPreview(container: HTMLElement) {
+		const images = container.querySelectorAll('img');
+		images.forEach(img => {
+			// 隐藏图片，只显示占位符链接
+			img.style.display = 'none';
+
+			// 创建图片链接元素
+			const imgLink = document.createElement('span');
+			imgLink.className = 'annotation-image-link';
+			imgLink.textContent = '🖼️ 图片';
+			imgLink.style.cursor = 'pointer';
+			imgLink.style.color = 'var(--text-accent)';
+			imgLink.style.textDecoration = 'underline';
+			imgLink.style.margin = '0 4px';
+
+			// 创建预览小窗
+			let previewEl: HTMLElement | null = null;
+
+			imgLink.addEventListener('mouseenter', (e) => {
+				if (previewEl) return;
+
+				previewEl = document.createElement('div');
+				previewEl.className = 'annotation-image-preview';
+				previewEl.style.cssText = `
+					position: fixed;
+					background: var(--background-primary);
+					border: 1px solid var(--background-modifier-border);
+					border-radius: 6px;
+					padding: 8px;
+					z-index: 10000;
+					box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+					max-width: 300px;
+					max-height: 200px;
+					overflow: hidden;
+				`;
+
+				const previewImg = document.createElement('img');
+				previewImg.src = img.src;
+				previewImg.style.cssText = `
+					max-width: 100%;
+					max-height: 180px;
+					object-fit: contain;
+					border-radius: 4px;
+				`;
+
+				previewEl.appendChild(previewImg);
+
+				// 定位预览窗口
+				const rect = imgLink.getBoundingClientRect();
+				previewEl.style.left = `${rect.left}px`;
+				previewEl.style.top = `${rect.bottom + 5}px`;
+
+				// 检查是否超出屏幕
+				if (rect.left + 300 > window.innerWidth) {
+					previewEl.style.left = `${window.innerWidth - 320}px`;
+				}
+				if (rect.bottom + 200 > window.innerHeight) {
+					previewEl.style.top = `${rect.top - 210}px`;
+				}
+
+				document.body.appendChild(previewEl);
+			});
+
+			imgLink.addEventListener('mouseleave', () => {
+				if (previewEl) {
+					previewEl.remove();
+					previewEl = null;
+				}
+			});
+
+			// 替换图片为链接
+			img.parentNode?.insertBefore(imgLink, img);
+		});
 	}
 
 	async onClose() {
@@ -1599,16 +2299,67 @@ class AnnotationSettingTab extends PluginSettingTab {
 		containerEl.createEl('h2', { text: '批注插件设置' });
 
 		// 批注文件夹设置
-		new Setting(containerEl)
+		const folderSetting = new Setting(containerEl)
 			.setName('批注文件夹')
-			.setDesc('批注文件将保存在此文件夹中')
-			.addText(text => text
+			.setDesc('批注文件将保存在此文件夹中');
+		
+		// 添加文本输入框
+		let folderInput: HTMLInputElement;
+		folderSetting.addText(text => {
+			text
 				.setPlaceholder('Annotations')
 				.setValue(this.plugin.settings.annotationFolder)
 				.onChange(async (value) => {
-					this.plugin.settings.annotationFolder = value || 'Annotations';
-					await this.plugin.saveSettings();
-				}));
+					let trimmedValue = value.trim();
+					
+					// 验证并清理路径
+					if (trimmedValue) {
+						// 移除开头的 "/" 或 "\\"
+						trimmedValue = trimmedValue.replace(/^[\/\\]+/, '');
+						// 移除结尾的 "/" 或 "\\"
+						trimmedValue = trimmedValue.replace(/[\/\\]+$/, '');
+					}
+					
+					if (trimmedValue) {
+						const oldFolder = this.plugin.settings.annotationFolder;
+						this.plugin.settings.annotationFolder = trimmedValue;
+						await this.plugin.saveSettings();
+						
+						// 如果路径发生变化，重新加载批注
+						if (oldFolder !== trimmedValue) {
+							await this.plugin.loadAnnotations();
+							this.plugin.forceRefreshHighlights();
+							new Notice(`批注文件夹已更改为: ${trimmedValue}`);
+						}
+					}
+				});
+			folderInput = text.inputEl;
+			return text;
+		});
+		
+		// 添加文件夹选择按钮
+		folderSetting.addButton(button => {
+			button
+				.setButtonText('选择文件夹')
+				.setTooltip('浏览并选择批注文件夹')
+				.onClick(async () => {
+					// 创建文件夹选择模态框
+					new FolderSuggestModal(this.app, async (folder) => {
+						const folderPath = folder.path === '/' ? '' : folder.path;
+						this.plugin.settings.annotationFolder = folderPath || 'Annotations';
+						await this.plugin.saveSettings();
+						// 更新输入框显示
+						if (folderInput) {
+							folderInput.value = this.plugin.settings.annotationFolder;
+						}
+						// 重新加载批注数据
+						await this.plugin.loadAnnotations();
+						this.plugin.forceRefreshHighlights();
+						new Notice(`批注文件夹已设置为: ${this.plugin.settings.annotationFolder}`);
+					}).open();
+				});
+			return button;
+		});
 
 		// 高亮颜色设置
 		new Setting(containerEl)
@@ -1640,5 +2391,153 @@ class AnnotationSettingTab extends PluginSettingTab {
 				.addOption('right', '右侧功能区')
 				.setValue('right')
 				.setDisabled(true));
+	}
+}
+
+// 文件夹选择模态框
+class FolderSuggestModal extends Modal {
+	private onChoose: (folder: TFolder) => void;
+	private folders: TFolder[] = [];
+
+	constructor(app: App, onChoose: (folder: TFolder) => void) {
+		super(app);
+		this.onChoose = onChoose;
+	}
+
+	onOpen() {
+		const { contentEl, titleEl } = this;
+		titleEl.setText('选择批注文件夹');
+
+		// 获取所有文件夹
+		this.folders = this.getAllFolders();
+
+		// 搜索输入框
+		const searchContainer = contentEl.createDiv('folder-search-container');
+		const searchInput = searchContainer.createEl('input', {
+			type: 'text',
+			placeholder: '搜索文件夹...',
+			cls: 'folder-search-input'
+		});
+		searchInput.style.width = '100%';
+		searchInput.style.marginBottom = '10px';
+		searchInput.style.padding = '5px';
+
+		// 文件夹列表容器
+		const listContainer = contentEl.createDiv('folder-list-container');
+		listContainer.style.maxHeight = '300px';
+		listContainer.style.overflow = 'auto';
+
+		// 渲染文件夹列表
+		const renderFolders = (filter: string = '') => {
+			listContainer.empty();
+			
+			// 添加 "创建新文件夹" 选项
+			const createNewItem = listContainer.createDiv('folder-list-item');
+			createNewItem.style.padding = '8px';
+			createNewItem.style.cursor = 'pointer';
+			createNewItem.style.borderBottom = '1px solid var(--background-modifier-border)';
+			createNewItem.style.fontWeight = 'bold';
+			createNewItem.style.color = 'var(--text-accent)';
+			createNewItem.textContent = filter ? `创建新文件夹 "${filter}"` : '+ 创建新文件夹';
+			createNewItem.addEventListener('click', async () => {
+				const folderName = filter || 'Annotations';
+				try {
+					const newFolder = await this.app.vault.createFolder(folderName);
+					this.onChoose(newFolder);
+					this.close();
+				} catch (error) {
+					new Notice('创建文件夹失败，可能已存在');
+				}
+			});
+			createNewItem.addEventListener('mouseover', () => {
+				createNewItem.style.backgroundColor = 'var(--background-modifier-hover)';
+			});
+			createNewItem.addEventListener('mouseout', () => {
+				createNewItem.style.backgroundColor = '';
+			});
+
+			// 过滤并排序文件夹
+			const filteredFolders = this.folders
+				.filter(folder => folder.path.toLowerCase().includes(filter.toLowerCase()))
+				.sort((a, b) => a.path.localeCompare(b.path));
+
+			for (const folder of filteredFolders) {
+				const item = listContainer.createDiv('folder-list-item');
+				item.style.padding = '8px';
+				item.style.cursor = 'pointer';
+				item.style.borderBottom = '1px solid var(--background-modifier-border)';
+				
+				// 文件夹图标和名称
+				const folderName = folder.path === '/' ? '根目录 (/)' : folder.path;
+				item.textContent = folderName;
+				
+				item.addEventListener('click', () => {
+					this.onChoose(folder);
+					this.close();
+				});
+				
+				item.addEventListener('mouseover', () => {
+					item.style.backgroundColor = 'var(--background-modifier-hover)';
+				});
+				
+				item.addEventListener('mouseout', () => {
+					item.style.backgroundColor = '';
+				});
+			}
+
+			if (filteredFolders.length === 0 && !filter) {
+				const emptyMsg = listContainer.createDiv('folder-list-empty');
+				emptyMsg.textContent = '没有找到文件夹';
+				emptyMsg.style.padding = '20px';
+				emptyMsg.style.textAlign = 'center';
+				emptyMsg.style.color = 'var(--text-muted)';
+			}
+		};
+
+		// 初始渲染
+		renderFolders();
+
+		// 搜索过滤
+		searchInput.addEventListener('input', (e) => {
+			renderFolders((e.target as HTMLInputElement).value);
+		});
+
+		// 聚焦搜索框
+		searchInput.focus();
+
+		// 取消按钮
+		const buttonContainer = contentEl.createDiv('modal-button-container');
+		buttonContainer.style.marginTop = '15px';
+		buttonContainer.style.display = 'flex';
+		buttonContainer.style.justifyContent = 'flex-end';
+		buttonContainer.style.gap = '10px';
+
+		const cancelButton = buttonContainer.createEl('button', { text: '取消' });
+		cancelButton.addEventListener('click', () => {
+			this.close();
+		});
+	}
+
+	private getAllFolders(): TFolder[] {
+		const folders: TFolder[] = [];
+		const root = this.app.vault.getRoot();
+		folders.push(root);
+		
+		const traverse = (folder: TFolder) => {
+			for (const child of folder.children) {
+				if (child instanceof TFolder) {
+					folders.push(child);
+					traverse(child);
+				}
+			}
+		};
+		
+		traverse(root);
+		return folders;
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
 	}
 }
