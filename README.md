@@ -1,18 +1,15 @@
-# 编写一个obsidian插件
+<img width="2179" height="1314" alt="image" src="https://github.com/user-attachments/assets/4e8c7a17-40b9-41b1-9e47-502136ed625c" />
 
-> 场景：在阅读长文的时候，能够在尽量不调整原文章格式的情况下对选中文字进行批注，批注需高亮，批注内容存放到另一个文件夹下，支持双向跳转。
 
-功能需求如下
-1. PC端
- - 在打开文章后，鼠标支持选中文字，右键-批注，然后提供文本框编写批注内容，批注内容存放到另一个文件夹下（支持配置），文件名定义为"当前文件名-批注.md"。
- - PC端要求写完批注后，可以在文章左右两侧空白初预览批注内容，支持批注隐藏/显示.
- - 点击左右两侧的批注内容可以定位到文章中的具体位置。
- - 查看批注文档时，也可以自动跳转到文章的具体位置。
-2. Mobile端
- - Mobile端与PC端数据格式兼容
- - 在打开文章后，选中文字，点击选中文字 出现批注二字，点击批注，提供文本框编写批注内容，批注内容存放到另一个文件夹下（支持配置），文件名定义为"当前文件名-批注.md"。
- - 单击文章中的被批注文字，可以悬浮显示批注内容，批注内容过长时，可以使用滚动条进行滚动查看，避免全覆盖mobile端屏幕
- - 查看批注文档时，也可以自动跳转到文章的具体位置。
+<img width="1175" height="860" alt="image" src="https://github.com/user-attachments/assets/1a041217-dc42-481c-a858-44f555df65cf" />
 
-代码要求：
-- 需要按照obsidian的插件规范进行代码编写。
+
+<img width="2160" height="1125" alt="image" src="https://github.com/user-attachments/assets/d1033cc9-9f70-4fbe-a600-939a316a48ba" />
+
+
+<img width="1010" height="279" alt="image" src="https://github.com/user-attachments/assets/f4cf1006-1c6f-42b1-8e3b-83cdc7ceeaa7" />
+
+<img width="2175" height="961" alt="image" src="https://github.com/user-attachments/assets/48dd4e80-2178-4d16-ac26-a1ca7d5531d5" />
+
+批注文件内容
+<img width="976" height="794" alt="image" src="https://github.com/user-attachments/assets/36cc67d4-141d-4fd1-aa6c-f8dea5d7a0e8" />
