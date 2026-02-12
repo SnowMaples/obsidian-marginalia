@@ -46,8 +46,8 @@
 
 ### 方式二：手动安装
 
-1. 前往 [Releases](https://www.google.com/search?q=https://github.com/SnowMaples/obsidian-marginalia/releases) 下载最新版本。
-2. 将 `main.js`、`manifest.json`、`styles.css` 放入你的仓库目录 `.obsidian/plugins/obsidian-annotation-plugin/` 下。
+1. 前往 [Releases](https://github.com/SnowMaples/obsidian-marginalia/releases) 下载最新版本。
+2. 将 `main.js`、`manifest.json`、`styles.css` 放入你的仓库目录 `.obsidian/plugins/obsidian-marginalia-plugin/` 下。
 3. 在插件设置中启用。
 
 ---
