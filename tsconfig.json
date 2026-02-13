@@ -9,11 +9,9 @@
     "noImplicitAny": true,
     "moduleResolution": "node",
     "importHelpers": true,
-    "declaration": true,
-    "outDir": "./lib",
-    "typeRoots": [
-      "node_modules/@types"
-    ],
+    "isolatedModules": true,
+    "strictNullChecks": true,
+    "strict": true,
     "lib": [
       "DOM",
       "ES6"

@@ -1,537 +1,664 @@
-/* 
- * Obsidian Annotation Plugin Styles
+/**
+ * Marginalia Plugin Styles
+ * Comprehensive styling for all plugin features
+ * Mobile and desktop responsive design
  */
 
-/* 批注高亮样式 */
-.annotation-highlight {
-    background-color: var(--annotation-highlight-color, #ffeb3b);
-    border-radius: 2px;
-    padding: 0 2px;
-    cursor: pointer;
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+/* ============================================
+   HIGHLIGHT STYLES
+   ============================================ */
+
+.marginalia-highlight {
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  padding: 1px 2px;
 }
 
-.annotation-highlight:hover {
-    background-color: var(--annotation-highlight-hover-color, #fdd835);
+.marginalia-highlight:hover {
+  filter: brightness(0.9);
 }
 
-/* 被选中的批注高亮样式（从右侧边栏点击时） */
-.annotation-highlight-active {
-    background-color: #ff6b6b !important;
-    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.7) !important;
-    animation: pulse 1.5s ease-in-out 3;
+.marginalia-highlight-active {
+  outline: 2px solid #0066cc;
+  outline-offset: 2px;
+  animation: marginalia-pulse 1s ease-in-out infinite;
 }
 
-@keyframes pulse {
-    0%, 100% {
-        box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.7);
-    }
-    50% {
-        box-shadow: 0 0 0 6px rgba(255, 107, 107, 0.3);
-    }
+@keyframes marginalia-pulse {
+  0%, 100% { outline-color: #0066cc; }
+  50% { outline-color: #66b3ff; }
 }
 
-/* Ctrl 键按下时的高亮样式 */
-body.ctrl-pressed .annotation-highlight {
-    cursor: alias !important;
-    box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.5);
+/* ============================================
+   FLOATING CARD (POPOVER) STYLES
+   ============================================ */
+
+.marginalia-floating-card {
+  position: fixed;
+  z-index: 1000;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  min-width: 300px;
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
 }
 
-body.ctrl-pressed .annotation-highlight:hover {
-    background-color: #ff6b6b !important;
-    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.7);
+.marginalia-floating-card-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--background-secondary);
+  border-radius: 8px 8px 0 0;
 }
 
-/* 移动端批注按钮 */
-.annotation-mobile-button {
-    position: absolute;
-    background-color: var(--interactive-accent);
-    color: var(--text-on-accent);
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 14px;
-    cursor: pointer;
-    z-index: 1000;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    animation: fadeIn 0.2s ease;
+.marginalia-floating-card-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.annotation-mobile-button:hover {
-    background-color: var(--interactive-accent-hover);
+.marginalia-floating-card-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--text-muted);
 }
 
-/* 批注悬浮提示（双击显示） */
-.annotation-tooltip {
-    position: absolute;
-    background-color: var(--background-primary);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 6px;
-    padding: 12px;
-    width: 300px;
-    max-height: 300px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
-    animation: fadeIn 0.2s ease;
-    display: flex;
-    flex-direction: column;
+.marginalia-floating-card-close:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
 }
 
-/* 关闭按钮 */
-.annotation-tooltip-close {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    background: none;
-    border: none;
-    font-size: 18px;
-    cursor: pointer;
-    color: var(--text-muted);
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 3px;
-    padding: 0;
+.marginalia-floating-card-source {
+  padding: 12px 16px;
+  background: var(--background-secondary-alt);
+  border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.annotation-tooltip-close:hover {
-    background-color: var(--background-modifier-hover);
-    color: var(--text-normal);
+.marginalia-floating-card-source blockquote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  border-left: 3px solid var(--interactive-accent);
+  padding-left: 12px;
 }
 
-/* 内容容器（可滚动） */
-.annotation-tooltip-content-container {
-    flex: 1;
-    overflow-y: auto;
-    max-height: 200px;
-    margin-top: 8px;
-    margin-bottom: 8px;
-    padding-right: 4px;
+.marginalia-floating-card-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  max-height: 300px;
 }
 
-.annotation-tooltip-content-container::-webkit-scrollbar {
-    width: 6px;
+.marginalia-floating-card-content textarea {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: var(--font-monospace);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-.annotation-tooltip-content-container::-webkit-scrollbar-track {
-    background: var(--background-secondary);
-    border-radius: 3px;
+.marginalia-floating-card-content textarea:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
 }
 
-.annotation-tooltip-content-container::-webkit-scrollbar-thumb {
-    background: var(--background-modifier-border);
-    border-radius: 3px;
+.marginalia-floating-card-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--background-modifier-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: var(--background-secondary);
+  border-radius: 0 0 8px 8px;
 }
 
-.annotation-tooltip-content {
-    font-size: 14px;
-    line-height: 1.5;
-    color: var(--text-normal);
-    white-space: pre-wrap;
-    word-wrap: break-word;
+/* ============================================
+   SIDEBAR STYLES
+   ============================================ */
+
+.marginalia-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-/* 底部栏 */
-.annotation-tooltip-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-top: 8px;
-    border-top: 1px solid var(--background-modifier-border);
-    margin-top: 4px;
+.marginalia-sidebar .view-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
-.annotation-tooltip-date {
-    font-size: 12px;
-    color: var(--text-muted);
+.marginalia-sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
 }
 
-.annotation-tooltip-btn-group {
-    display: flex;
-    gap: 6px;
+.marginalia-sidebar-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
 }
 
-.annotation-tooltip-btn {
-    background: none;
-    border: none;
-    padding: 4px;
-    cursor: pointer;
-    color: var(--text-muted);
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
+.marginalia-sidebar-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  padding: 2px 8px;
+  border-radius: 12px;
 }
 
-.annotation-tooltip-btn:hover {
-    background-color: var(--background-modifier-hover);
-    color: var(--text-normal);
+.marginalia-sidebar-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
 }
 
-.annotation-tooltip-btn-delete {
-    color: var(--text-error);
+.marginalia-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
 }
 
-.annotation-tooltip-btn-delete:hover {
-    background-color: var(--background-modifier-error);
-    color: var(--text-error);
+.marginalia-empty-state p {
+  margin: 8px 0;
 }
 
-/* 批注编辑弹窗样式 */
-.annotation-modal {
-    max-width: 500px;
+.marginalia-empty-hint {
+  font-size: 13px;
+  opacity: 0.7;
 }
 
-.annotation-selected-label,
-.annotation-content-label {
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: var(--text-normal);
+/* 编辑模式占位内容样式 */
+.marginalia-edit-mode-placeholder {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
 }
 
-.annotation-selected-text {
-    background-color: var(--background-secondary);
-    border-left: 3px solid var(--interactive-accent);
-    padding: 10px 15px;
-    margin: 10px 0;
-    font-style: italic;
-    color: var(--text-muted);
-    border-radius: 0 4px 4px 0;
+.marginalia-edit-mode-text {
+  font-size: 15px;
+  margin: 0 0 8px 0;
+  font-weight: 500;
 }
 
-.annotation-textarea {
-    width: 100%;
-    min-height: 100px;
-    padding: 10px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    background-color: var(--background-primary);
-    color: var(--text-normal);
-    font-family: inherit;
-    font-size: 14px;
-    line-height: 1.5;
-    resize: vertical;
+.marginalia-edit-mode-hint {
+  font-size: 13px;
+  opacity: 0.6;
+  margin: 0;
 }
 
-.annotation-textarea:focus {
-    outline: none;
-    border-color: var(--interactive-accent);
+.marginalia-annotation-card {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
 }
 
-.annotation-button-container {
-    margin-top: 20px;
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
+.marginalia-annotation-card:hover {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* 右侧功能区批注视图 - 类似出链列表 */
-.annotation-right-sidebar-view {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
+.marginalia-annotation-card.active {
+  border-color: var(--interactive-accent);
+  background: var(--background-secondary-alt);
+  box-shadow: 0 0 0 2px var(--interactive-accent);
 }
 
-.annotation-sidebar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 15px;
-    border-bottom: 1px solid var(--background-modifier-border);
-    background-color: var(--background-secondary-alt);
-    flex-shrink: 0;
+.marginalia-card-source {
+  margin-bottom: 8px;
 }
 
-.annotation-sidebar-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-normal);
+.marginalia-card-source blockquote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  border-left: 3px solid var(--interactive-accent);
+  padding-left: 8px;
 }
 
-.annotation-sidebar-count {
-    font-size: 12px;
-    color: var(--text-muted);
+.marginalia-card-content {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 8px;
 }
 
-.annotation-sidebar-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px;
+.marginalia-card-content p {
+  margin: 0 0 8px 0;
 }
 
-.annotation-sidebar-content::-webkit-scrollbar {
-    width: 6px;
+.marginalia-card-content p:last-child {
+  margin-bottom: 0;
 }
 
-.annotation-sidebar-content::-webkit-scrollbar-track {
-    background: transparent;
+.marginalia-empty-content {
+  color: var(--text-muted);
+  font-style: italic;
 }
 
-.annotation-sidebar-content::-webkit-scrollbar-thumb {
-    background: var(--background-modifier-border);
-    border-radius: 3px;
+/* 卡片编辑区域 textarea 自适应 */
+.marginalia-card-content textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: var(--font-monospace);
+  font-size: 14px;
+  line-height: 1.5;
+  box-sizing: border-box;
 }
 
-.annotation-sidebar-empty {
-    text-align: center;
-    color: var(--text-muted);
-    padding: 40px 20px;
-    font-size: 13px;
+.marginalia-card-content textarea:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
 }
 
-.annotation-sidebar-item {
-    padding: 10px 12px 24px 12px;
-    margin-bottom: 8px;
-    background-color: var(--background-primary);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    position: relative;
+/* 卡片底部区域 - 包含时间和按钮 */
+.marginalia-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
 }
 
-.annotation-sidebar-item:hover {
-    border-color: var(--interactive-accent);
-    background-color: var(--background-secondary);
+.marginalia-card-meta {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
-.annotation-sidebar-item.active {
-    border-color: var(--interactive-accent);
-    background-color: var(--background-secondary-alt);
-    box-shadow: 0 0 0 2px var(--interactive-accent);
+.marginalia-card-actions {
+  display: flex;
+  gap: 4px;
 }
 
-.annotation-sidebar-quote {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-style: italic;
-    margin-bottom: 6px;
-    padding-left: 8px;
-    border-left: 2px solid var(--interactive-accent);
-    line-height: 1.4;
+/* ============================================
+   BUTTON STYLES
+   ============================================ */
+
+.marginalia-btn {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s ease;
 }
 
-.annotation-sidebar-comment {
-    font-size: 13px;
-    color: var(--text-normal);
-    line-height: 1.5;
-    margin-bottom: 8px;
+.marginalia-btn:hover {
+  filter: brightness(1.1);
 }
 
-.annotation-sidebar-actions {
-    display: flex;
-    gap: 6px;
-    justify-content: flex-end;
+.marginalia-btn-small {
+  padding: 4px 8px;
+  font-size: 12px;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.marginalia-btn-danger {
+  background: var(--text-error);
+}
+
+.marginalia-btn-secondary {
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* ============================================
+   INPUT MODAL STYLES
+   ============================================ */
+
+.marginalia-input-modal {
+  padding: 20px;
+  min-width: 400px;
+}
+
+.marginalia-input-modal h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+}
+
+.marginalia-input-modal-source {
+  background: var(--background-secondary);
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.marginalia-input-modal textarea {
+  width: 100%;
+  min-height: 150px;
+  margin-bottom: 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: var(--font-monospace);
+  font-size: 14px;
+  resize: vertical;
+}
+
+.marginalia-input-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 紧凑版输入弹窗样式 */
+.marginalia-input-modal-compact {
+  padding: 12px 16px;
+  min-width: 360px;
+}
+
+.marginalia-input-modal-header {
+  margin-bottom: 8px;
+}
+
+.marginalia-input-modal-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.marginalia-input-modal-source-compact {
+  background: var(--background-secondary);
+  padding: 8px 10px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  max-height: 60px;
+  overflow-y: auto;
+}
+
+.marginalia-input-modal-source-compact p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.marginalia-input-modal-textarea {
+  width: 100%;
+  min-height: 100px;
+  margin-bottom: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: var(--font-monospace);
+  font-size: 13px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.marginalia-input-modal-textarea:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+}
+
+.marginalia-input-modal-actions-compact {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.marginalia-btn-compact {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  padding: 4px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.marginalia-btn-compact:hover {
+  filter: brightness(1.1);
+}
+
+/* ============================================
+   CONTEXT MENU STYLES
+   ============================================ */
+
+.marginalia-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  min-width: 150px;
+}
+
+.marginalia-context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s ease;
+}
+
+.marginalia-context-menu-item:hover {
+  background: var(--background-modifier-hover);
+}
+
+.marginalia-context-menu-item-icon {
+  font-size: 16px;
+}
+
+/* ============================================
+   IMAGE LINK STYLES
+   ============================================ */
+
+.marginalia-card-content img,
+.marginalia-floating-card-content img {
+  display: none;
+}
+
+.marginalia-card-content img::after,
+.marginalia-floating-card-content img::after {
+  content: attr(alt);
+  display: inline;
+  color: var(--text-accent);
+  text-decoration: underline;
+  font-size: 13px;
+}
+
+.marginalia-image-preview {
+  position: fixed;
+  z-index: 1001;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  padding: 8px;
+  max-width: 300px;
+}
+
+.marginalia-image-preview img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 2px;
+}
+
+/* ============================================
+   MOBILE STYLES
+   ============================================ */
+
+.is-mobile .marginalia-floating-card {
+  max-width: calc(100vw - 32px);
+  min-width: auto;
+  max-height: 70vh;
+  left: 16px !important;
+  right: 16px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+.is-mobile .marginalia-sidebar {
+  font-size: 15px;
+}
+
+.is-mobile .marginalia-annotation-card {
+  padding: 16px;
+}
+
+.is-mobile .marginalia-card-actions {
+  display: flex;
+  position: static;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+.is-mobile .marginalia-card-actions .marginalia-btn {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.is-mobile .marginalia-context-menu {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: auto;
+  border-radius: 12px 12px 0 0;
+  padding: 16px 0;
+}
+
+.is-mobile .marginalia-context-menu-item {
+  padding: 16px 24px;
+  font-size: 16px;
+}
+
+/* ============================================
+   SETTINGS STYLES
+   ============================================ */
+
+.marginalia-setting-item {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.marginalia-setting-item:last-child {
+  border-bottom: none;
+}
+
+.marginalia-setting-item-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.marginalia-setting-item-description {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.marginalia-color-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marginalia-color-picker input[type="color"] {
+  width: 50px;
+  height: 32px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* ============================================
+   SCROLLBAR STYLES
+   ============================================ */
+
+.marginalia-floating-card-content::-webkit-scrollbar,
+.marginalia-sidebar-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.marginalia-floating-card-content::-webkit-scrollbar-track,
+.marginalia-sidebar-container::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+  border-radius: 3px;
+}
+
+.marginalia-floating-card-content::-webkit-scrollbar-thumb,
+.marginalia-sidebar-container::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+}
+
+.marginalia-floating-card-content::-webkit-scrollbar-thumb:hover,
+.marginalia-sidebar-container::-webkit-scrollbar-thumb:hover {
+  background: var(--background-modifier-border-hover);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes marginalia-fade-in {
+  from {
     opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-.annotation-sidebar-item:hover .annotation-sidebar-actions {
+    transform: translateY(-10px);
+  }
+  to {
     opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.annotation-sidebar-btn {
-    background: none;
-    border: none;
-    padding: 4px;
-    cursor: pointer;
-    color: var(--text-muted);
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
+.marginalia-floating-card {
+  animation: marginalia-fade-in 0.2s ease-out;
 }
 
-.annotation-sidebar-btn:hover {
-    background-color: var(--background-modifier-hover);
-    color: var(--text-normal);
-}
-
-.annotation-sidebar-btn-delete {
-    color: var(--text-error);
-}
-
-.annotation-sidebar-btn-delete:hover {
-    background-color: var(--background-modifier-error);
-    color: var(--text-error);
-}
-
-/* 日期时间样式 - 左下角，默认隐藏 */
-.annotation-sidebar-date {
-    position: absolute;
-    left: 8px;
-    bottom: 8px;
-    font-size: 10px;
-    color: var(--text-faint);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-}
-
-.annotation-sidebar-item:hover .annotation-sidebar-date {
-    opacity: 1;
-}
-
-/* 功能区图标样式 */
-.workspace-tab-header[data-type="annotation-preview-view"] .workspace-tab-header-inner-icon {
-    color: var(--interactive-accent);
-}
-
-/* 动画 */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-5px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* 移动端适配 */
-.is-mobile .annotation-tooltip {
-    max-width: 90vw;
-    max-height: 50vh;
-}
-
-.is-mobile .annotation-mobile-button {
-    padding: 8px 16px;
-    font-size: 16px;
-}
-
-/* Word 式侧边批注面板 */
-.has-annotation-sidebar .view-content {
-    display: flex !important;
-    flex-direction: row !important;
-}
-
-.annotation-word-sidebar {
-    width: 250px;
-    min-width: 250px;
-    max-width: 250px;
-    background-color: var(--background-secondary);
-    border-left: 1px solid var(--background-modifier-border);
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-}
-
-.annotation-word-sidebar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 15px;
-    font-weight: 600;
-    font-size: 14px;
-    border-bottom: 1px solid var(--background-modifier-border);
-    background-color: var(--background-secondary-alt);
-}
-
-.annotation-word-sidebar-close {
-    background: none;
-    border: none;
-    font-size: 20px;
-    cursor: pointer;
-    color: var(--text-muted);
-    padding: 0;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 3px;
-}
-
-.annotation-word-sidebar-close:hover {
-    background-color: var(--background-modifier-hover);
-    color: var(--text-normal);
-}
-
-.annotation-word-sidebar-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-}
-
-.annotation-word-sidebar-content::-webkit-scrollbar {
-    width: 4px;
-}
-
-.annotation-word-sidebar-content::-webkit-scrollbar-track {
-    background: var(--background-secondary);
-}
-
-.annotation-word-sidebar-content::-webkit-scrollbar-thumb {
-    background: var(--background-modifier-border);
-    border-radius: 2px;
-}
-
-.annotation-word-sidebar-empty {
-    text-align: center;
-    color: var(--text-muted);
-    padding: 40px 20px;
-    font-size: 14px;
-}
-
-.annotation-word-sidebar-item {
-    background-color: var(--background-primary);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 6px;
-    padding: 10px;
-    margin-bottom: 10px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.annotation-word-sidebar-item:hover {
-    border-color: var(--interactive-accent);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.annotation-word-sidebar-item.active {
-    border-color: var(--interactive-accent);
-    background-color: var(--background-secondary);
-    box-shadow: 0 0 0 2px var(--interactive-accent);
-}
-
-.annotation-word-sidebar-selected {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-style: italic;
-    margin-bottom: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px dashed var(--background-modifier-border);
-    line-height: 1.4;
-}
-
-.annotation-word-sidebar-text {
-    font-size: 13px;
-    color: var(--text-normal);
-    line-height: 1.5;
-}
-
-/* 调整编辑器区域大小 */
-.has-annotation-sidebar .cm-editor {
-    flex: 1;
-    min-width: 0;
-}
-
-/* 打印样式 */
-@media print {
-    .annotation-highlight {
-        background-color: #ffeb3b !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-    }
-    
-    .annotation-tooltip,
-    .annotation-mobile-button,
-    .annotation-word-sidebar {
-        display: none !important;
-    }
+.marginalia-annotation-card {
+  animation: marginalia-fade-in 0.3s ease-out;
 }

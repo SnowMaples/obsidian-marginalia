@@ -1,55 +1,76 @@
-# Obsidian Marginalia Plugin
+# Obsidian Marginalia
 
-🖋️ **让批注回归边际**：一款专为 Obsidian 打造的侧边栏批注插件，支持在阅读时对选中文字添加即时感官记录，提供类似 Word 的丝滑交互体验。
+A powerful annotation plugin for Obsidian with highlighting, sidebar view, and bidirectional navigation.
 
----
+## Features
 
-## 🌟 核心功能
+- **Annotation Creation**: Right-click on selected text (PC) or use the floating menu (mobile) to create annotations
+- **Real-time Highlighting**: Annotations are immediately highlighted in the document
+- **Floating Card View**: Double-click highlighted text to view and edit annotations
+- **Right Sidebar Panel**: View all annotations for the current file in a dedicated sidebar
+- **Bidirectional Navigation**: Jump between annotations in the document and annotation files
+- **Auto-save**: Edit annotations directly in the floating card with automatic saving
+- **Mobile Support**: Full mobile support with touch-friendly interface
+- **Customizable**: Configure folder location, highlight color, and more
 
-* **非侵入式存储**：批注内容存储在独立的 `.md` 文件中（如 `article-annotation.md`），保持原文件纯净。
-* **即时批注**：选中正文文字，右键即可弹出简洁的批注输入窗口。
-* **侧边栏同步**：通过右侧功能区实时展示当前文章的所有批注记录。
-* **实时同步**：支持对批注进行编辑、删除，并实时反馈至正文高亮状态。
-* **编辑模式高亮**：在 Obsidian 编辑模式下自动识别批注区域，支持双击查看详情。
+## Installation
 
-## 🛠️ 安装方法
+1. Download the latest release
+2. Extract to your vault's `.obsidian/plugins/` folder
+3. Enable the plugin in Obsidian settings
 
-### 方式一：手动安装
+## Usage
 
-1. 前往 [Releases](https://github.com/SnowMaples/obsidian-marginalia/releases) 下载最新版本。
-2. 将 `main.js`、`manifest.json`、`styles.css` 放入你的仓库目录 `.obsidian/plugins/obsidian-marginalia-plugin/` 下。
-3. 在插件设置中启用。
+### Creating Annotations
 
-### 方式二：社区插件市场（待上架）
+**On PC:**
+1. Select text in your document
+2. Right-click and select "Add annotation"
+3. Enter your annotation in the popup
 
-1. 打开 Obsidian 设置。
-2. 进入 `Community plugins` -> `Browse`。
-3. 搜索 `Obsidian Marginalia Plugin` 并安装。
+**On Mobile:**
+1. Select text in your document
+2. Tap the "Annotate" button in the floating menu
+3. Enter your annotation in the popup
 
----
+### Viewing Annotations
 
-## 📸 界面预览
+- Double-click highlighted text to open the annotation card
+- View all annotations in the right sidebar panel
 
-### 1. 侧边栏批注展示
+### Editing Annotations
 
-<img width="600" height="400" alt="image" src="https://github.com/user-attachments/assets/d1033cc9-9f70-4fbe-a600-939a316a48ba" />
+- Edit directly in the floating card
+- Changes are automatically saved when you close the card
 
-### 2. 正文批注高亮与交互
+### Deleting Annotations
 
-<img width="600" height="400" alt="image" src="https://github.com/user-attachments/assets/4e8c7a17-40b9-41b1-9e47-502136ed625c" />
+- Click the delete button in the floating card or sidebar card
 
+### Navigation
 
+- **Ctrl+Click** (or Cmd+Click on Mac) on highlighted text to jump to the annotation file
+- Click the "Go to source" button in the sidebar to jump to the highlighted text
 
-<img width="600" height="400" alt="image" src="https://github.com/user-attachments/assets/1a041217-dc42-481c-a858-44f555df65cf" />
+## Settings
 
-### 3. 批注文件存储结构
+- **Annotation folder**: Where annotation files are stored (default: `_annotations`)
+- **Auto-show sidebar**: Automatically show sidebar for annotated files
+- **Highlight color**: Customize the highlight color
+- **Enable on mobile**: Toggle mobile support
 
-<img width="600" height="500" alt="image" src="https://github.com/user-attachments/assets/36cc67d4-141d-4fd1-aa6c-f8dea5d7a0e8" />
+## File Structure
 
----
+Annotations are stored in a separate folder as Markdown files with the format:
+`{original-filename}-annotation.md`
 
+Each annotation includes:
+- Unique ID
+- Selected text
+- Position information
+- Creation and update timestamps
+- Markdown content
 
+## License
 
-
-
-
+MIT
