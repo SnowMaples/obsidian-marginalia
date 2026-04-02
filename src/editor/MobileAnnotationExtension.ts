@@ -1,7 +1,9 @@
 import {
 	Decoration,
 	EditorView,
+	ViewPlugin,
 	type DecorationSet,
+	type ViewUpdate,
 } from '@codemirror/view';
 import {
 	StateField,
@@ -9,7 +11,7 @@ import {
 	type Extension,
 } from '@codemirror/state';
 import type MarginaliaPlugin from '../main';
-import type {ResolvedAnchor} from '../types';
+import {MobileCommentPopup} from './MobileCommentPopup';
 
 interface MobileAnnotationInfo {
 	from: number;
@@ -22,9 +24,8 @@ interface MobileAnnotationInfo {
 export const updateMobileAnnotations = StateEffect.define<MobileAnnotationInfo[]>();
 
 function buildDecorations(
-	plugin: MarginaliaPlugin,
 	infos: MobileAnnotationInfo[],
-	doc: { length: number }
+	doc: { length: number; sliceString: (from: number, to: number) => string }
 ): DecorationSet {
 	const ranges: {from: number; to: number; value: Decoration}[] = [];
 
@@ -33,12 +34,18 @@ function buildDecorations(
 		const safeTo = Math.max(safeFrom, Math.min(info.to, doc.length));
 		if (safeFrom >= safeTo) continue;
 
+		const text = doc.sliceString(safeFrom, safeTo);
+		const cls = info.isOrphaned
+			? 'marginalia-mobile-annotation marginalia-mobile-annotation-orphaned'
+			: info.allResolved
+				? 'marginalia-mobile-annotation marginalia-mobile-annotation-resolved'
+				: 'marginalia-mobile-annotation';
+
 		const mark = Decoration.mark({
-			class: info.isOrphaned
-				? 'marginalia-mobile-annotation marginalia-mobile-annotation-orphaned'
-				: info.allResolved
-					? 'marginalia-mobile-annotation marginalia-mobile-annotation-resolved'
-					: 'marginalia-mobile-annotation',
+			class: cls,
+			attributes: {
+				'data-comment-ids': info.commentIds.join(','),
+			},
 		});
 
 		ranges.push({
@@ -73,7 +80,7 @@ export function createMobileAnnotationExtension(plugin: MarginaliaPlugin): Exten
 		update(value: DecorationSet, tr): DecorationSet {
 			for (const effect of tr.effects) {
 				if (effect.is(updateMobileAnnotations)) {
-					return buildDecorations(plugin, effect.value, tr.state.doc);
+					return buildDecorations(effect.value, tr.state.doc);
 				}
 			}
 			if (tr.docChanged) {
@@ -84,23 +91,33 @@ export function createMobileAnnotationExtension(plugin: MarginaliaPlugin): Exten
 		provide: (f) => EditorView.decorations.from(f),
 	});
 
-	return [annotationField, decorationField];
-}
+	const clickPlugin = ViewPlugin.fromClass(
+		class {
+			update(_update: ViewUpdate) {}
+		},
+		{
+			eventHandlers: {
+				click: (event: MouseEvent, view: EditorView) => {
+					const target = event.target as HTMLElement | null;
+					if (!target) return;
 
-export function buildMobileAnnotationInfos(
-	anchors: Map<string, ResolvedAnchor>,
-): MobileAnnotationInfo[] {
-	const infos: MobileAnnotationInfo[] = [];
+					const annotation = target.closest('.marginalia-mobile-annotation');
+					if (!annotation) return;
 
-	for (const [commentId, anchor] of anchors) {
-		infos.push({
-			from: anchor.from,
-			to: anchor.to,
-			commentIds: [commentId],
-			allResolved: false,
-			isOrphaned: false,
-		});
-	}
+					const commentIdsStr = annotation.getAttribute('data-comment-ids');
+					if (!commentIdsStr) return;
 
-	return infos;
+					event.preventDefault();
+					event.stopPropagation();
+
+					const commentIds = commentIdsStr.split(',').filter(Boolean);
+					if (commentIds.length > 0) {
+						MobileCommentPopup.show(plugin, commentIds);
+					}
+				},
+			},
+		},
+	);
+
+	return [annotationField, decorationField, clickPlugin];
 }

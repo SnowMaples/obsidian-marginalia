@@ -53,31 +53,28 @@ export default class MarginaliaPlugin extends Plugin {
 		this.store.setAnchorResolver(resolveAnchor);
 		await this.store.initialize();
 
-		this.popover = new CommentPopover(this);
-
 		new VaultEventHandler(this, this.store).registerEvents();
 
 		if (this.isMobile) {
-			// Mobile: register annotation extension for dashed underline
+			this.popover = null as unknown as CommentPopover;
+
 			if (this.settings.enableMobileAnnotations) {
 				this.mobileAnnotationExtension = createMobileAnnotationExtension(this);
 				this.registerEditorExtension(this.mobileAnnotationExtension);
 			}
 
-			// Mobile: register reading mode highlight
 			this.mobileReadingHighlight = new MobileReadingHighlight(this);
 			this.registerMarkdownPostProcessor((el, ctx) => {
 				this.mobileReadingHighlight?.processSection(el, ctx);
 			});
 		} else {
-			// Desktop: register side panel view
+			this.popover = new CommentPopover(this);
+
 			this.registerView(VIEW_TYPE_COMMENT_PANEL, (leaf) => new CommentPanelView(leaf, this));
 
-			// Desktop: register CM6 gutter extension
 			this.gutterExtension = createCommentGutter(this);
 			this.registerEditorExtension(this.gutterExtension);
 
-			// Desktop: register Reading View gutter
 			this.readingGutter = new ReadingGutter(this);
 			this.registerMarkdownPostProcessor((el, ctx) => {
 				this.readingGutter.processSection(el, ctx);
@@ -199,7 +196,9 @@ export default class MarginaliaPlugin extends Plugin {
 	}
 
 	onunload() {
-		this.popover?.destroy();
+		if (!this.isMobile) {
+			this.popover?.destroy();
+		}
 		if (this.resolveDebounceTimer) clearTimeout(this.resolveDebounceTimer);
 		void this.store?.flushAll();
 	}

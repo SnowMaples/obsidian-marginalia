@@ -1,107 +1,78 @@
-import {MarkdownRenderer, MarkdownView, setIcon, Component} from 'obsidian';
+import {MarkdownRenderer, MarkdownView, Modal, setIcon, type Component} from 'obsidian';
 import type MarginaliaPlugin from '../main';
 import {isReplyComment, isAnchoredComment, getRootResolution} from '../types';
+import type {AnchoredComment, CommentData, NoteComment, ReplyComment, RootComment} from '../types';
 import {getThreads} from '../comment/threading';
 import {CommentModal} from '../views/CommentModal';
 
-class MobilePopupComponent extends Component {
-	constructor(private popupEl: HTMLElement) {
-		super();
-	}
-
-	override onunload(): void {
-		this.popupEl.empty();
-	}
-}
-
-export class MobileCommentPopup {
-	private static instance: MobileCommentPopup | null = null;
-
+export class MobileCommentPopup extends Modal {
 	private plugin: MarginaliaPlugin;
-	private popupEl: HTMLElement;
-	private overlayEl: HTMLElement;
-	private popupComponent: MobilePopupComponent | null = null;
-	private commentIds: string[] = [];
+	private commentIds: string[];
 
-	private constructor(plugin: MarginaliaPlugin) {
+	constructor(plugin: MarginaliaPlugin, commentIds: string[]) {
+		super(plugin.app);
 		this.plugin = plugin;
-
-		this.overlayEl = document.createElement('div');
-		this.overlayEl.className = 'marginalia-mobile-overlay';
-		this.overlayEl.addEventListener('click', () => this.hide());
-
-		this.popupEl = document.createElement('div');
-		this.popupEl.className = 'marginalia-mobile-popup';
-		this.popupEl.addEventListener('click', (e) => e.stopPropagation());
-	}
-
-	static show(plugin: MarginaliaPlugin, commentIds: string[], anchorEl: HTMLElement): void {
-		if (!this.instance) {
-			this.instance = new MobileCommentPopup(plugin);
-		}
-
-		void this.instance.render(commentIds);
-	}
-
-	hide(): void {
-		this.popupEl.removeClass('marginalia-mobile-popup-visible');
-		this.overlayEl.removeClass('marginalia-mobile-overlay-visible');
-
-		if (this.popupComponent) {
-			this.popupComponent.unload();
-			this.popupComponent = null;
-		}
-
-		setTimeout(() => {
-			this.popupEl.remove();
-			this.overlayEl.remove();
-		}, 300);
-	}
-
-	private async render(commentIds: string[]): Promise<void> {
 		this.commentIds = commentIds;
+	}
+
+	static show(plugin: MarginaliaPlugin, commentIds: string[]): void {
+		new MobileCommentPopup(plugin, commentIds).open();
+	}
+
+	onOpen(): void {
+		const {contentEl} = this;
+		contentEl.addClass('marginalia-mobile-popup');
+		contentEl.empty();
+
+		void this.render();
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+
+	private async render(): Promise<void> {
+		const {contentEl} = this;
 
 		const file = this.plugin.app.workspace.getActiveFile();
-		if (!file) return;
+		if (!file) {
+			contentEl.createEl('p', {text: 'No active file.'});
+			return;
+		}
 
 		const allComments = await this.plugin.store.getComments(file.path);
 		const threads = getThreads(allComments);
-		const matchedThreads = threads.filter(t => commentIds.includes(t.root.id));
-		if (matchedThreads.length === 0) return;
+		const matchedThreads = threads.filter(t => this.commentIds.includes(t.root.id));
 
-		this.popupEl.empty();
+		if (matchedThreads.length === 0) {
+			contentEl.createEl('p', {text: 'No comments found.'});
+			return;
+		}
 
-		const header = this.popupEl.createDiv({cls: 'marginalia-mobile-popup-header'});
-		header.createDiv({cls: 'marginalia-mobile-popup-handle'});
+		const header = contentEl.createDiv({cls: 'marginalia-mobile-popup-header'});
+		const handle = header.createDiv({cls: 'marginalia-mobile-popup-handle'});
 		const title = header.createDiv({cls: 'marginalia-mobile-popup-title'});
 		title.textContent = matchedThreads.length === 1
 			? 'Comment'
 			: `${matchedThreads.length} Comments`;
 
-		const content = this.popupEl.createDiv({cls: 'marginalia-mobile-popup-content'});
+		const scrollContent = contentEl.createDiv({cls: 'marginalia-mobile-popup-content'});
 
 		for (let i = 0; i < matchedThreads.length; i++) {
 			const thread = matchedThreads[i]!;
 			if (i > 0) {
-				content.createDiv({cls: 'marginalia-mobile-popup-divider'});
+				scrollContent.createDiv({cls: 'marginalia-mobile-popup-divider'});
 			}
-			await this.renderThread(content, thread);
+			await this.renderThread(scrollContent, thread, file.path, allComments);
 		}
-
-		if (!this.popupEl.parentElement) {
-			document.body.appendChild(this.overlayEl);
-			document.body.appendChild(this.popupEl);
-		}
-
-		this.popupComponent = new MobilePopupComponent(this.popupEl);
-
-		requestAnimationFrame(() => {
-			this.overlayEl.addClass('marginalia-mobile-overlay-visible');
-			this.popupEl.addClass('marginalia-mobile-popup-visible');
-		});
 	}
 
-	private async renderThread(container: HTMLElement, thread: ReturnType<typeof getThreads>[number]): Promise<void> {
+	private async renderThread(
+		container: HTMLElement,
+		thread: ReturnType<typeof getThreads>[number],
+		filePath: string,
+		allComments: CommentData[]
+	): Promise<void> {
 		const resolved = getRootResolution(thread.root) === 'resolved';
 		const threadEl = container.createDiv({
 			cls: `marginalia-mobile-thread${resolved ? ' marginalia-mobile-resolved' : ''}`,
@@ -130,52 +101,59 @@ export class MobileCommentPopup {
 
 		const bodyEl = threadEl.createDiv({cls: 'marginalia-mobile-body'});
 		await MarkdownRenderer.render(
-			this.plugin.app,
+			this.app,
 			thread.root.body,
 			bodyEl,
-			this.plugin.app.workspace.getActiveFile()?.path ?? '',
-			this.popupComponent ?? this.plugin,
+			filePath,
+			this.plugin,
 		);
 
 		const actionsEl = threadEl.createDiv({cls: 'marginalia-mobile-actions'});
-		await this.renderActionButtons(actionsEl, thread.root);
+		await this.renderActionButtons(actionsEl, thread.root, filePath);
 
 		if (thread.replies.length > 0) {
 			const repliesEl = threadEl.createDiv({cls: 'marginalia-mobile-replies'});
 			for (const reply of thread.replies) {
-				await this.renderReply(repliesEl, reply);
+				await this.renderReply(repliesEl, reply, filePath);
 			}
 		}
 
 		const replyBtn = threadEl.createEl('button', {
 			cls: 'marginalia-mobile-reply-btn',
-			text: 'Reply',
 		});
 		setIcon(replyBtn.createSpan(), 'message-circle');
 		replyBtn.createSpan({text: thread.replies.length > 0 ? `Reply (${thread.replies.length})` : 'Reply'});
 		replyBtn.addEventListener('click', () => {
-			this.addReply(thread.root.id);
+			this.addReply(thread.root.id, filePath);
 		});
 	}
 
-	private async renderReply(container: HTMLElement, reply: ReturnType<typeof getThreads>[number]['replies'][number]): Promise<void> {
+	private async renderReply(
+		container: HTMLElement,
+		reply: ReplyComment,
+		filePath: string
+	): Promise<void> {
 		const replyEl = container.createDiv({cls: 'marginalia-mobile-reply'});
 
 		const bodyEl = replyEl.createDiv({cls: 'marginalia-mobile-body'});
 		await MarkdownRenderer.render(
-			this.plugin.app,
+			this.app,
 			reply.body,
 			bodyEl,
-			this.plugin.app.workspace.getActiveFile()?.path ?? '',
-			this.popupComponent ?? this.plugin,
+			filePath,
+			this.plugin,
 		);
 
 		const actionsEl = replyEl.createDiv({cls: 'marginalia-mobile-actions'});
-		await this.renderActionButtons(actionsEl, reply);
+		await this.renderActionButtons(actionsEl, reply, filePath);
 	}
 
-	private async renderActionButtons(container: HTMLElement, comment: {id: string; body: string}): Promise<void> {
-		const isRoot = !isReplyComment(comment as never);
+	private async renderActionButtons(
+		container: HTMLElement,
+		comment: {id: string; body: string},
+		filePath: string
+	): Promise<void> {
+		const isRoot = !isReplyComment(comment as CommentData);
 
 		if (isRoot) {
 			const resolveBtn = container.createEl('button', {
@@ -184,7 +162,7 @@ export class MobileCommentPopup {
 			});
 			setIcon(resolveBtn, 'check-circle');
 			resolveBtn.addEventListener('click', () => {
-				void this.toggleResolution(comment.id);
+				void this.toggleResolution(comment.id, filePath);
 			});
 		}
 
@@ -194,7 +172,7 @@ export class MobileCommentPopup {
 		});
 		setIcon(editBtn, 'pencil');
 		editBtn.addEventListener('click', () => {
-			this.editComment(comment);
+			this.editComment(comment, filePath);
 		});
 
 		const deleteBtn = container.createEl('button', {
@@ -203,38 +181,30 @@ export class MobileCommentPopup {
 		});
 		setIcon(deleteBtn, 'trash');
 		deleteBtn.addEventListener('click', () => {
-			void this.deleteComment(comment.id);
+			void this.deleteComment(comment.id, filePath);
 		});
 	}
 
-	private async toggleResolution(commentId: string): Promise<void> {
-		const file = this.plugin.app.workspace.getActiveFile();
-		if (!file) return;
+	private async toggleResolution(commentId: string, filePath: string): Promise<void> {
+		await this.plugin.store.toggleResolution(filePath, commentId);
+		this.close();
+		this.plugin.updateGutterEffects();
+		MobileCommentPopup.show(this.plugin, this.commentIds);
+	}
 
-		await this.plugin.store.toggleResolution(file.path, commentId);
-		await this.render(this.commentIds);
+	private async deleteComment(commentId: string, filePath: string): Promise<void> {
+		await this.plugin.store.deleteComment(filePath, commentId);
+		this.close();
 		this.plugin.updateGutterEffects();
 	}
 
-	private async deleteComment(commentId: string): Promise<void> {
-		const file = this.plugin.app.workspace.getActiveFile();
-		if (!file) return;
-
-		await this.plugin.store.deleteComment(file.path, commentId);
-		this.hide();
-		this.plugin.updateGutterEffects();
-	}
-
-	private editComment(comment: {id: string; body: string}): void {
-		const file = this.plugin.app.workspace.getActiveFile();
-		if (!file) return;
-
-		this.hide();
+	private editComment(comment: {id: string; body: string}, filePath: string): void {
+		this.close();
 
 		new CommentModal(
-			this.plugin.app,
+			this.app,
 			(body) => {
-				void this.plugin.store.updateComment(file.path, comment.id, body).then(() => {
+				void this.plugin.store.updateComment(filePath, comment.id, body).then(() => {
 					this.plugin.updateGutterEffects();
 				});
 			},
@@ -242,16 +212,13 @@ export class MobileCommentPopup {
 		).open();
 	}
 
-	private addReply(parentId: string): void {
-		const file = this.plugin.app.workspace.getActiveFile();
-		if (!file) return;
-
-		this.hide();
+	private addReply(parentId: string, filePath: string): void {
+		this.close();
 
 		new CommentModal(
-			this.plugin.app,
+			this.app,
 			(body) => {
-				void this.plugin.store.addReply(file.path, parentId, body).then(() => {
+				void this.plugin.store.addReply(filePath, parentId, body).then(() => {
 					this.plugin.updateGutterEffects();
 				});
 			},
@@ -274,6 +241,6 @@ export class MobileCommentPopup {
 			{from: pos, to: editor.offsetToPos(anchor.to)},
 			true
 		);
-		this.hide();
+		this.close();
 	}
 }

@@ -1,7 +1,7 @@
 import {MarkdownView} from 'obsidian';
 import type {MarkdownPostProcessorContext} from 'obsidian';
 import type MarginaliaPlugin from '../main';
-import {isRootComment, getRootResolution} from '../types';
+import {isRootComment, getRootResolution, isAnchoredComment} from '../types';
 import type {ResolvedAnchor} from '../types';
 import {MobileCommentPopup} from './MobileCommentPopup';
 
@@ -32,7 +32,25 @@ export class MobileReadingHighlight {
 			}
 		}
 
-		this.applyHighlights(el, info.lineStart, info.lineEnd, anchors, resolutionMap);
+		const relevantAnchors: Array<{
+			commentId: string;
+			anchor: ResolvedAnchor;
+			resolved: boolean;
+		}> = [];
+
+		for (const [commentId, anchor] of anchors) {
+			if (anchor.line >= info.lineStart && anchor.line <= info.lineEnd) {
+				relevantAnchors.push({
+					commentId,
+					anchor,
+					resolved: resolutionMap.get(commentId) === 'resolved',
+				});
+			}
+		}
+
+		if (relevantAnchors.length === 0) return;
+
+		this.highlightTextInElement(el, relevantAnchors);
 	}
 
 	refreshActiveView(): void {
@@ -62,6 +80,8 @@ export class MobileReadingHighlight {
 
 			const anchors = this.plugin.getCachedAnchors();
 			const comments = this.plugin.getCachedComments();
+			if (anchors.size === 0) continue;
+
 			const resolutionMap = new Map<string, 'open' | 'resolved'>();
 			for (const c of comments) {
 				if (isRootComment(c)) {
@@ -69,127 +89,100 @@ export class MobileReadingHighlight {
 				}
 			}
 
-			this.applyHighlights(section, lineStart, lineEnd, anchors, resolutionMap);
-		}
-	}
+			const relevantAnchors: Array<{
+				commentId: string;
+				anchor: ResolvedAnchor;
+				resolved: boolean;
+			}> = [];
 
-	private applyHighlights(
-		el: HTMLElement,
-		lineStart: number,
-		lineEnd: number,
-		anchors: Map<string, ResolvedAnchor>,
-		resolutionMap: Map<string, 'open' | 'resolved'>
-	): void {
-		const relevantAnchors: Array<{commentId: string; anchor: ResolvedAnchor; resolved: boolean}> = [];
-
-		for (const [commentId, anchor] of anchors) {
-			if (anchor.line >= lineStart && anchor.line <= lineEnd) {
-				relevantAnchors.push({
-					commentId,
-					anchor,
-					resolved: resolutionMap.get(commentId) === 'resolved',
-				});
+			for (const [commentId, anchor] of anchors) {
+				if (anchor.line >= lineStart && anchor.line <= lineEnd) {
+					relevantAnchors.push({
+						commentId,
+						anchor,
+						resolved: resolutionMap.get(commentId) === 'resolved',
+					});
+				}
 			}
+
+			if (relevantAnchors.length === 0) continue;
+
+			this.highlightTextInElement(section, relevantAnchors);
 		}
-
-		if (relevantAnchors.length === 0) return;
-
-		this.highlightTextNodes(el, relevantAnchors, lineStart);
 	}
 
-	private highlightTextNodes(
+	private highlightTextInElement(
 		container: HTMLElement,
-		anchors: Array<{commentId: string; anchor: ResolvedAnchor; resolved: boolean}>,
-		sectionLineStart: number
+		anchors: Array<{commentId: string; anchor: ResolvedAnchor; resolved: boolean}>
 	): void {
 		const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+		const textNodes: Text[] = [];
 		let node: Node | null;
 
 		while ((node = walker.nextNode())) {
-			if (!node.parentElement || node.parentElement.closest('.marginalia-mobile-annotation')) continue;
+			if (node.nodeType !== Node.TEXT_NODE) continue;
+			if (node.parentElement?.closest('.marginalia-mobile-annotation')) continue;
+			textNodes.push(node as Text);
+		}
 
-			const text = node.textContent;
+		for (const textNode of textNodes) {
+			const text = textNode.textContent;
 			if (!text || text.trim().length === 0) continue;
 
-			const matchingAnchors = this.findMatchingAnchors(anchors, text, node, sectionLineStart);
-			if (matchingAnchors.length === 0) continue;
+			const matches: Array<{offset: number; length: number; commentId: string; resolved: boolean}> = [];
+
+			for (const {commentId, resolved} of anchors) {
+				const exactText = this.getExactText(commentId);
+				if (!exactText) continue;
+
+				let idx = text.indexOf(exactText);
+				while (idx !== -1) {
+					matches.push({offset: idx, length: exactText.length, commentId, resolved});
+					idx = text.indexOf(exactText, idx + 1);
+				}
+			}
+
+			if (matches.length === 0) continue;
+
+			matches.sort((a, b) => a.offset - b.offset);
 
 			const fragment = document.createDocumentFragment();
 			let lastIndex = 0;
 
-			const sorted = matchingAnchors.sort((a, b) => a.textOffset - b.textOffset);
-
-			for (const match of sorted) {
-				if (match.textOffset > lastIndex) {
-					fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.textOffset)));
+			for (const match of matches) {
+				if (match.offset > lastIndex) {
+					fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.offset)));
 				}
 
 				const span = document.createElement('span');
 				span.className = `marginalia-mobile-annotation${match.resolved ? ' marginalia-mobile-annotation-resolved' : ''}`;
-				span.setAttribute('data-comment-ids', match.commentIds.join(','));
-				span.textContent = match.matchedText;
+				span.setAttribute('data-comment-ids', match.commentId);
+				span.textContent = text.substring(match.offset, match.offset + match.length);
 
 				span.addEventListener('click', (e) => {
 					e.preventDefault();
 					e.stopPropagation();
-					MobileCommentPopup.show(this.plugin, match.commentIds, span);
+					MobileCommentPopup.show(this.plugin, [match.commentId]);
 				});
 
 				fragment.appendChild(span);
-				lastIndex = match.textOffset + match.matchedText.length;
+				lastIndex = match.offset + match.length;
 			}
 
 			if (lastIndex < text.length) {
 				fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
 			}
 
-			if (node.parentNode) {
-				node.parentNode.replaceChild(fragment, node);
+			if (textNode.parentNode) {
+				textNode.parentNode.replaceChild(fragment, textNode);
 			}
 		}
-	}
-
-	private findMatchingAnchors(
-		anchors: Array<{commentId: string; anchor: ResolvedAnchor; resolved: boolean}>,
-		text: string,
-		node: Node,
-		sectionLineStart: number
-	): Array<{textOffset: number; matchedText: string; commentIds: string[]; resolved: boolean}> {
-		const results: Array<{textOffset: number; matchedText: string; commentIds: string[]; resolved: boolean}> = [];
-
-		for (const {commentId, resolved} of anchors) {
-			const exactText = this.getExactText(commentId);
-			if (!exactText) continue;
-
-			const idx = text.indexOf(exactText);
-			if (idx !== -1) {
-				results.push({
-					textOffset: idx,
-					matchedText: exactText,
-					commentIds: [commentId],
-					resolved,
-				});
-			} else {
-				const shortText = exactText.length > 50 ? exactText.substring(0, 50) : exactText;
-				const shortIdx = text.indexOf(shortText);
-				if (shortIdx !== -1) {
-					results.push({
-						textOffset: shortIdx,
-						matchedText: shortText,
-						commentIds: [commentId],
-						resolved,
-					});
-				}
-			}
-		}
-
-		return results;
 	}
 
 	private getExactText(commentId: string): string | null {
 		const comments = this.plugin.getCachedComments();
 		const comment = comments.find(c => c.id === commentId);
-		if (!comment || !('target' in comment)) return null;
-		return (comment as {target: {exact: string}}).target.exact;
+		if (!comment || !isAnchoredComment(comment)) return null;
+		return comment.target.exact;
 	}
 }
