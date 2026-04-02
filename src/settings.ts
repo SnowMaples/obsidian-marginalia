@@ -7,6 +7,7 @@ export interface MarginaliaSettings {
 	showGutterIcons: boolean;
 	fuzzyMatchThreshold: number;
 	orphanHandling: 'keep' | 'delete';
+	enableMobileAnnotations: boolean;
 }
 
 export const DEFAULT_SETTINGS: MarginaliaSettings = {
@@ -15,6 +16,7 @@ export const DEFAULT_SETTINGS: MarginaliaSettings = {
 	showGutterIcons: true,
 	fuzzyMatchThreshold: 0.3,
 	orphanHandling: 'keep',
+	enableMobileAnnotations: true,
 };
 
 export class MarginaliaSettingTab extends PluginSettingTab {
@@ -120,6 +122,16 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.orphanHandling)
 				.onChange(async (value) => {
 					this.plugin.settings.orphanHandling = value as 'keep' | 'delete';
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Mobile annotations')
+			.setDesc('Show dashed underline for comments on mobile devices. Tap to view and manage comments.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableMobileAnnotations)
+				.onChange(async (value) => {
+					this.plugin.settings.enableMobileAnnotations = value;
 					await this.plugin.saveSettings();
 				}));
 	}

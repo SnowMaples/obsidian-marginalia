@@ -1,4 +1,4 @@
-import {Editor, MarkdownView, normalizePath, Plugin} from 'obsidian';
+import {Editor, MarkdownView, normalizePath, Platform, Plugin} from 'obsidian';
 import {DEFAULT_SETTINGS, MarginaliaSettings, MarginaliaSettingTab} from "./settings";
 import {CommentStore} from "./storage/CommentStore";
 import {VaultEventHandler} from "./events/VaultEventHandler";
@@ -6,6 +6,8 @@ import {resolveAnchor, findHeadingContext, extractContext} from "./anchoring/Tex
 import {CommentPopover} from "./editor/PopoverExtension";
 import {createCommentGutter, updateCommentPositions} from "./editor/GutterExtension";
 import {ReadingGutter} from "./editor/ReadingGutter";
+import {createMobileAnnotationExtension, updateMobileAnnotations} from "./editor/MobileAnnotationExtension";
+import {MobileReadingHighlight} from "./editor/MobileReadingHighlight";
 import {CommentPanelView, VIEW_TYPE_COMMENT_PANEL} from "./views/CommentPanelView";
 import {CommentModal} from "./views/CommentModal";
 import type {CommentData, CommentTarget, ResolvedAnchor} from "./types";
@@ -19,10 +21,13 @@ export default class MarginaliaPlugin extends Plugin {
 	private popover: CommentPopover;
 	private gutterExtension: Extension;
 	private readingGutter: ReadingGutter;
+	private mobileAnnotationExtension: Extension | null = null;
+	private mobileReadingHighlight: MobileReadingHighlight | null = null;
 	private resolveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 	private cachedAnchors: Map<string, ResolvedAnchor> = new Map();
 	private cachedComments: CommentData[] = [];
 	private cachedFilePath: string | null = null;
+	private isMobile = Platform.isMobile;
 
 	getCachedAnchors(): Map<string, ResolvedAnchor> {
 		return this.cachedAnchors;
@@ -52,18 +57,32 @@ export default class MarginaliaPlugin extends Plugin {
 
 		new VaultEventHandler(this, this.store).registerEvents();
 
-		// Register side panel view
-		this.registerView(VIEW_TYPE_COMMENT_PANEL, (leaf) => new CommentPanelView(leaf, this));
+		if (this.isMobile) {
+			// Mobile: register annotation extension for dashed underline
+			if (this.settings.enableMobileAnnotations) {
+				this.mobileAnnotationExtension = createMobileAnnotationExtension(this);
+				this.registerEditorExtension(this.mobileAnnotationExtension);
+			}
 
-		// Register CM6 gutter extension
-		this.gutterExtension = createCommentGutter(this);
-		this.registerEditorExtension(this.gutterExtension);
+			// Mobile: register reading mode highlight
+			this.mobileReadingHighlight = new MobileReadingHighlight(this);
+			this.registerMarkdownPostProcessor((el, ctx) => {
+				this.mobileReadingHighlight?.processSection(el, ctx);
+			});
+		} else {
+			// Desktop: register side panel view
+			this.registerView(VIEW_TYPE_COMMENT_PANEL, (leaf) => new CommentPanelView(leaf, this));
 
-		// Register Reading View gutter
-		this.readingGutter = new ReadingGutter(this);
-		this.registerMarkdownPostProcessor((el, ctx) => {
-			this.readingGutter.processSection(el, ctx);
-		});
+			// Desktop: register CM6 gutter extension
+			this.gutterExtension = createCommentGutter(this);
+			this.registerEditorExtension(this.gutterExtension);
+
+			// Desktop: register Reading View gutter
+			this.readingGutter = new ReadingGutter(this);
+			this.registerMarkdownPostProcessor((el, ctx) => {
+				this.readingGutter.processSection(el, ctx);
+			});
+		}
 
 		// Commands
 		this.addCommand({
@@ -119,34 +138,38 @@ export default class MarginaliaPlugin extends Plugin {
 			},
 		});
 
-		// Context menu
-		this.registerEvent(
-			this.app.workspace.on('editor-menu', (menu, editor, view) => {
-				if (editor.somethingSelected() && view.file) {
-					menu.addItem((item) => {
-						item.setTitle('Add comment')
-							.setIcon('message-square')
-							.onClick(() => {
-								this.addCommentFromSelection(editor, view as MarkdownView);
-							});
-					});
-				}
-				if (view.file) {
-					menu.addItem((item) => {
-						item.setTitle('Add note comment')
-							.setIcon('sticky-note')
-							.onClick(() => {
-								this.addNoteComment(view.file!.path);
-							});
-					});
-				}
-			})
-		);
+		// Context menu (desktop only)
+		if (!this.isMobile) {
+			this.registerEvent(
+				this.app.workspace.on('editor-menu', (menu, editor, view) => {
+					if (editor.somethingSelected() && view.file) {
+						menu.addItem((item) => {
+							item.setTitle('Add comment')
+								.setIcon('message-square')
+								.onClick(() => {
+									this.addCommentFromSelection(editor, view as MarkdownView);
+								});
+						});
+					}
+					if (view.file) {
+						menu.addItem((item) => {
+							item.setTitle('Add note comment')
+								.setIcon('sticky-note')
+								.onClick(() => {
+									this.addNoteComment(view.file!.path);
+								});
+						});
+					}
+				})
+			);
+		}
 
-		// Ribbon icon
-		this.addRibbonIcon('message-square', 'Open comment panel', () => {
-			void this.activatePanel();
-		});
+		// Ribbon icon (desktop only)
+		if (!this.isMobile) {
+			this.addRibbonIcon('message-square', 'Open comment panel', () => {
+				void this.activatePanel();
+			});
+		}
 
 		// Settings tab
 		this.addSettingTab(new MarginaliaSettingTab(this.app, this));
@@ -257,7 +280,9 @@ export default class MarginaliaPlugin extends Plugin {
 		new CommentModal(this.app, (body) => {
 			void this.store.addComment(filePath, body, target).then(() => {
 				void this.updateGutterForActiveFile();
-				this.refreshPanel();
+				if (!this.isMobile) {
+					this.refreshPanel();
+				}
 			});
 		}).open();
 	}
@@ -265,7 +290,9 @@ export default class MarginaliaPlugin extends Plugin {
 	private addNoteComment(filePath: string): void {
 		new CommentModal(this.app, (body) => {
 			void this.store.addNoteComment(filePath, body).then(() => {
-				this.refreshPanel();
+				if (!this.isMobile) {
+					this.refreshPanel();
+				}
 			});
 		}, undefined, 'Add note comment').open();
 	}
@@ -325,12 +352,19 @@ export default class MarginaliaPlugin extends Plugin {
 		this.cachedComments = comments;
 		this.cachedFilePath = filePath;
 
-		if (mdView.getMode() === 'preview') {
-			this.readingGutter.refreshActiveView();
+		if (this.isMobile) {
+			this.dispatchMobileAnnotationUpdate(anchors, comments);
+			if (mdView.getMode() === 'preview') {
+				this.mobileReadingHighlight?.refreshActiveView();
+			}
 		} else {
-			this.dispatchGutterUpdate(anchors, comments);
+			if (mdView.getMode() === 'preview') {
+				this.readingGutter.refreshActiveView();
+			} else {
+				this.dispatchGutterUpdate(anchors, comments);
+			}
+			this.refreshPanel();
 		}
-		this.refreshPanel();
 	}
 
 	private async updateGutterForActiveFile(): Promise<void> {
@@ -350,11 +384,47 @@ export default class MarginaliaPlugin extends Plugin {
 		this.cachedComments = comments;
 		this.cachedFilePath = file.path;
 
-		if (mdView.getMode() === 'preview') {
-			this.readingGutter.refreshActiveView();
+		if (this.isMobile) {
+			this.dispatchMobileAnnotationUpdate(anchors, comments);
+			if (mdView.getMode() === 'preview') {
+				this.mobileReadingHighlight?.refreshActiveView();
+			}
 		} else {
-			this.dispatchGutterUpdate(anchors, comments);
+			if (mdView.getMode() === 'preview') {
+				this.readingGutter.refreshActiveView();
+			} else {
+				this.dispatchGutterUpdate(anchors, comments);
+			}
+			this.refreshPanel();
 		}
+	}
+
+	private dispatchMobileAnnotationUpdate(anchors: Map<string, ResolvedAnchor>, comments: CommentData[]): void {
+		const mdView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (!mdView) return;
+
+		const editorObj: Record<string, unknown> = mdView.editor as unknown as Record<string, unknown>;
+		const cmEditor = editorObj['cm'] as {dispatch: (spec: {effects: unknown}) => void} | undefined;
+		if (!cmEditor) return;
+
+		const resolutionMap = new Map<string, 'open' | 'resolved'>();
+		for (const c of comments) {
+			if (isRootComment(c)) {
+				resolutionMap.set(c.id, getRootResolution(c));
+			}
+		}
+
+		const infos = [...anchors.entries()].map(([commentId, anchor]) => ({
+			from: anchor.from,
+			to: anchor.to,
+			commentIds: [commentId],
+			allResolved: resolutionMap.get(commentId) === 'resolved',
+			isOrphaned: false,
+		}));
+
+		cmEditor.dispatch({
+			effects: updateMobileAnnotations.of(infos),
+		});
 	}
 
 	private dispatchGutterUpdate(anchors: Map<string, ResolvedAnchor>, comments: CommentData[]): void {

@@ -422,3 +422,227 @@
 	from { transform: rotate(0deg); }
 	to { transform: rotate(360deg); }
 }
+
+/* Mobile annotation dashed underline */
+.marginalia-mobile-annotation {
+	text-decoration: underline dashed var(--text-accent);
+	text-underline-offset: 3px;
+	cursor: pointer;
+	border-radius: 2px;
+	transition: background-color 150ms ease;
+}
+
+.marginalia-mobile-annotation:active {
+	background-color: var(--background-modifier-active-hover);
+}
+
+.marginalia-mobile-annotation-resolved {
+	text-decoration-color: var(--text-success);
+	opacity: 0.7;
+}
+
+.marginalia-mobile-annotation-orphaned {
+	text-decoration-color: var(--text-error);
+}
+
+/* Mobile overlay */
+.marginalia-mobile-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: calc(var(--layer-modal) - 1);
+	opacity: 0;
+	transition: opacity 300ms ease;
+	pointer-events: none;
+}
+
+.marginalia-mobile-overlay-visible {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* Mobile bottom sheet popup */
+.marginalia-mobile-popup {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: var(--layer-modal);
+	max-height: 70vh;
+	background: var(--background-primary);
+	border-radius: var(--radius-l) var(--radius-l) 0 0;
+	box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+	transform: translateY(100%);
+	transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.marginalia-mobile-popup-visible {
+	transform: translateY(0);
+}
+
+.marginalia-mobile-popup-header {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 12px 16px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	flex-shrink: 0;
+}
+
+.marginalia-mobile-popup-handle {
+	width: 36px;
+	height: 4px;
+	background: var(--background-modifier-border);
+	border-radius: 2px;
+	margin-bottom: 8px;
+}
+
+.marginalia-mobile-popup-title {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+	align-self: flex-start;
+}
+
+.marginalia-mobile-popup-content {
+	overflow-y: auto;
+	padding: 12px 16px;
+	flex: 1;
+	-webkit-overflow-scrolling: touch;
+}
+
+.marginalia-mobile-popup-divider {
+	margin: 12px 0;
+	border: none;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.marginalia-mobile-thread {
+	margin-bottom: 8px;
+}
+
+.marginalia-mobile-resolved {
+	opacity: 0.7;
+}
+
+.marginalia-mobile-quote {
+	margin: 0 0 8px 0;
+	padding: 6px 10px;
+	border-left: 3px solid var(--text-accent);
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.marginalia-mobile-quote:active {
+	background: var(--background-modifier-active-hover);
+}
+
+.marginalia-mobile-orphaned-badge {
+	font-size: var(--font-smallest);
+	color: var(--text-error);
+	margin-left: 4px;
+}
+
+.marginalia-mobile-resolved-badge {
+	font-size: var(--font-smallest);
+	color: var(--text-success);
+	margin-left: 4px;
+}
+
+.marginalia-mobile-body {
+	font-size: var(--font-small);
+	margin-bottom: 8px;
+}
+
+.marginalia-mobile-body p {
+	margin: 0 0 4px 0;
+}
+
+.marginalia-mobile-actions {
+	display: flex;
+	gap: 8px;
+	padding: 8px 0;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.marginalia-mobile-action-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	padding: 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	cursor: pointer;
+	min-height: 44px;
+	font-size: var(--font-ui-small);
+}
+
+.marginalia-mobile-action-btn:active {
+	background: var(--background-modifier-active-hover);
+}
+
+.marginalia-mobile-action-btn svg {
+	width: 18px;
+	height: 18px;
+}
+
+.marginalia-mobile-action-danger {
+	color: var(--text-error);
+}
+
+.marginalia-mobile-action-danger:active {
+	background: var(--background-modifier-error-hover);
+}
+
+.marginalia-mobile-replies {
+	margin-left: 12px;
+	padding-left: 12px;
+	border-left: 2px solid var(--background-modifier-border);
+	margin-bottom: 8px;
+}
+
+.marginalia-mobile-reply {
+	padding: 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	margin-top: 8px;
+}
+
+.marginalia-mobile-reply-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: 100%;
+	padding: 10px;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	min-height: 44px;
+	font-size: var(--font-ui-small);
+	margin-top: 8px;
+}
+
+.marginalia-mobile-reply-btn:active {
+	background: var(--background-modifier-active-hover);
+}
+
+.marginalia-mobile-reply-btn svg {
+	width: 16px;
+	height: 16px;
+}
