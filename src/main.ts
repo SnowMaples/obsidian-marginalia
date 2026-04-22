@@ -39,11 +39,7 @@ export default class MarginaliaPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		const basePath = normalizePath(
-			this.settings.storageLocation === 'vault'
-				? '.marginalia'
-				: `${this.manifest.dir ?? ''}/comments`
-		);
+		const basePath = normalizePath(this.settings.storageLocation);
 		this.store = new CommentStore(this.app.vault, basePath);
 		this.store.setAnchorResolver(resolveAnchor);
 		await this.store.initialize();

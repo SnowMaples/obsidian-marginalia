@@ -2,7 +2,7 @@ import {App, Notice, normalizePath, PluginSettingTab, Setting} from "obsidian";
 import type MarginaliaPlugin from "./main";
 
 export interface MarginaliaSettings {
-	storageLocation: 'plugin' | 'vault';
+	storageLocation: string;
 	commentSortOrder: 'position' | 'created';
 	showGutterIcons: boolean;
 	fuzzyMatchThreshold: number;
@@ -10,7 +10,7 @@ export interface MarginaliaSettings {
 }
 
 export const DEFAULT_SETTINGS: MarginaliaSettings = {
-	storageLocation: 'plugin',
+	storageLocation: '.marginalia',
 	commentSortOrder: 'position',
 	showGutterIcons: true,
 	fuzzyMatchThreshold: 0.3,
@@ -31,25 +31,47 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Storage location')
-			.setDesc('Where comment data is stored. After changing, use the migrate button to move existing data. Without migration, a plugin reload is needed and previous comments will not be visible.')
-			.addDropdown(dropdown => dropdown
-				.addOption('plugin', 'Plugin folder (comments/)')
-				.addOption('vault', 'Vault root (.marginalia/)')
+			.setDesc('Where comment data is stored. Enter a custom path or select a preset.')
+			.addText(text => text
+				.setPlaceholder('.marginalia')
 				.setValue(this.plugin.settings.storageLocation)
 				.onChange(async (value) => {
-					this.plugin.settings.storageLocation = value as 'plugin' | 'vault';
+					this.plugin.settings.storageLocation = value;
 					await this.plugin.saveSettings();
 				}))
 			.addExtraButton(button => {
 				button
-					.setIcon('refresh-cw')
-					.setTooltip('Migrate comment data to the selected location')
+					.setIcon('folder')
+					.setTooltip('Plugin folder (comments/)')
 					.onClick(async () => {
-						const newBasePath = normalizePath(
-							this.plugin.settings.storageLocation === 'vault'
-								? '.marginalia'
-								: `${this.plugin.manifest.dir ?? ''}/comments`
-						);
+						const path = normalizePath(`${this.plugin.manifest.dir ?? ''}/comments`);
+						this.plugin.settings.storageLocation = path;
+						await this.plugin.saveSettings();
+						this.display();
+					});
+			})
+			.addExtraButton(button => {
+				button
+					.setIcon('hard-drive')
+					.setTooltip('Vault root (.marginalia/)')
+					.onClick(async () => {
+						const path = normalizePath('.marginalia');
+						this.plugin.settings.storageLocation = path;
+						await this.plugin.saveSettings();
+						this.display();
+					});
+			})
+			.addExtraButton(button => {
+				button
+					.setIcon('refresh-cw')
+					.setTooltip('Migrate comment data to the entered location')
+					.onClick(async () => {
+						const newBasePath = normalizePath(this.plugin.settings.storageLocation);
+
+						if (!newBasePath) {
+							new Notice('Please enter a storage location first.');
+							return;
+						}
 
 						if (newBasePath === this.plugin.store.currentBasePath) {
 							new Notice('Comment data is already in the selected location.');
