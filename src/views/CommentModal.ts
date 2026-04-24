@@ -16,6 +16,7 @@ export class CommentModal extends Modal {
 	onOpen(): void {
 		const {contentEl} = this;
 		contentEl.addClass('marginalia-modal');
+		this.modalEl.addClass('marginalia-comment-modal');
 
 		contentEl.createEl('h3', {
 			text: this.modalTitle ?? (this.initialBody ? 'Edit comment' : 'Add comment'),

@@ -61,16 +61,17 @@ class CommentIconWidget extends WidgetType {
 		el.addEventListener('click', (e) => {
 			e.preventDefault();
 			e.stopPropagation();
-			const firstId = this.commentIds[0];
-			if (firstId) this.plugin.scrollPanelToComment(firstId);
+			this.plugin.openCommentsForIds(this.commentIds);
 		});
 
-		el.addEventListener('mouseenter', () => {
-			this.plugin.showPopover(el, this.commentIds);
-		});
-		el.addEventListener('mouseleave', () => {
-			this.plugin.hidePopover();
-		});
+		if (!this.plugin.isMobile()) {
+			el.addEventListener('mouseenter', () => {
+				this.plugin.showPopover(el, this.commentIds);
+			});
+			el.addEventListener('mouseleave', () => {
+				this.plugin.hidePopover();
+			});
+		}
 
 		return el;
 	}

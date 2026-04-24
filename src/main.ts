@@ -1,4 +1,4 @@
-import {Editor, MarkdownView, normalizePath, Plugin} from 'obsidian';
+import {Editor, MarkdownView, normalizePath, Platform, Plugin} from 'obsidian';
 import {DEFAULT_SETTINGS, MarginaliaSettings, MarginaliaSettingTab} from "./settings";
 import {CommentStore} from "./storage/CommentStore";
 import {VaultEventHandler} from "./events/VaultEventHandler";
@@ -8,6 +8,7 @@ import {createCommentGutter, updateCommentPositions} from "./editor/GutterExtens
 import {ReadingGutter} from "./editor/ReadingGutter";
 import {CommentPanelView, VIEW_TYPE_COMMENT_PANEL} from "./views/CommentPanelView";
 import {CommentModal} from "./views/CommentModal";
+import {MobileCommentSheet} from "./views/MobileCommentSheet";
 import type {CommentData, CommentTarget, ResolvedAnchor} from "./types";
 import {getRootResolution, isRootComment} from "./types";
 import {findNavigationTarget} from "./comment/navigation";
@@ -17,6 +18,7 @@ export default class MarginaliaPlugin extends Plugin {
 	settings: MarginaliaSettings;
 	store: CommentStore;
 	private popover: CommentPopover;
+	private mobileSheet: MobileCommentSheet | null = null;
 	private gutterExtension: Extension;
 	private readingGutter: ReadingGutter;
 	private resolveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -167,7 +169,7 @@ export default class MarginaliaPlugin extends Plugin {
 			})
 		);
 
-		// Update gutter on mode switch (source â†” preview)
+		// Update gutter on mode switch (source â†?preview)
 		this.registerEvent(
 			this.app.workspace.on('layout-change', () => {
 				void this.updateGutterForActiveFile();
@@ -189,6 +191,10 @@ export default class MarginaliaPlugin extends Plugin {
 				void view.refresh();
 			}
 		}
+
+		if (this.mobileSheet) {
+			void this.mobileSheet.refresh();
+		}
 	}
 
 	updateGutterEffects(): void {
@@ -196,6 +202,11 @@ export default class MarginaliaPlugin extends Plugin {
 	}
 
 	scrollPanelToComment(commentId: string): void {
+		if (this.isMobile()) {
+			this.openMobileSheet([commentId]);
+			return;
+		}
+
 		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_COMMENT_PANEL);
 		for (const leaf of leaves) {
 			const view = leaf.view;
@@ -219,13 +230,31 @@ export default class MarginaliaPlugin extends Plugin {
 	}
 
 	showPopover(anchor: HTMLElement, commentIds: string[]): void {
-		if (this.settings.showGutterIcons) {
+		if (!this.isMobile() && this.settings.showGutterIcons) {
 			void this.popover?.show(anchor, commentIds);
 		}
 	}
 
 	hidePopover(): void {
-		this.popover?.scheduleHide();
+		if (!this.isMobile()) {
+			this.popover?.scheduleHide();
+		}
+	}
+
+	isMobile(): boolean {
+		return Platform.isMobile;
+	}
+
+	openCommentsForIds(commentIds: string[]): void {
+		if (this.isMobile()) {
+			this.openMobileSheet(commentIds);
+			return;
+		}
+
+		const firstId = commentIds[0];
+		if (firstId) {
+			this.scrollPanelToComment(firstId);
+		}
 	}
 
 	async loadSettings() {
@@ -271,6 +300,11 @@ export default class MarginaliaPlugin extends Plugin {
 	}
 
 	private async activatePanel(): Promise<void> {
+		if (this.isMobile()) {
+			this.openMobileSheet(null);
+			return;
+		}
+
 		const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_COMMENT_PANEL);
 		if (existing.length > 0) {
 			void this.app.workspace.revealLeaf(existing[0]!);
@@ -282,6 +316,19 @@ export default class MarginaliaPlugin extends Plugin {
 			await leaf.setViewState({type: VIEW_TYPE_COMMENT_PANEL, active: true});
 			void this.app.workspace.revealLeaf(leaf);
 		}
+	}
+
+	private openMobileSheet(commentIds: string[] | null): void {
+		if (!this.mobileSheet) {
+			this.mobileSheet = new MobileCommentSheet(this);
+		}
+
+		this.mobileSheet.setVisibleCommentIds(commentIds);
+		if (this.mobileSheet.isSheetOpen) {
+			void this.mobileSheet.refresh();
+			return;
+		}
+		this.mobileSheet.open();
 	}
 
 	private async navigateComment(editor: Editor, filePath: string, direction: 'next' | 'prev'): Promise<void> {
@@ -366,7 +413,7 @@ export default class MarginaliaPlugin extends Plugin {
 		const cmEditor = editorObj['cm'] as {dispatch: (spec: {effects: unknown}) => void} | undefined;
 		if (!cmEditor) return;
 
-		// Build a map of commentId â†’ resolution for root comments
+		// Build a map of commentId â†?resolution for root comments
 		const resolutionMap = new Map<string, 'open' | 'resolved'>();
 		for (const c of comments) {
 			if (isRootComment(c)) {
@@ -386,3 +433,4 @@ export default class MarginaliaPlugin extends Plugin {
 		});
 	}
 }
+
