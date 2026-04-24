@@ -1,5 +1,5 @@
-import {Editor, MarkdownView, normalizePath, Platform, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MarginaliaSettings, MarginaliaSettingTab} from "./settings";
+import {Editor, MarkdownView, Platform, Plugin} from 'obsidian';
+import {MarginaliaSettings, MarginaliaSettingTab, normalizeSettings, resolveStorageBasePath} from "./settings";
 import {CommentStore} from "./storage/CommentStore";
 import {VaultEventHandler} from "./events/VaultEventHandler";
 import {resolveAnchor, findHeadingContext, extractContext} from "./anchoring/TextQuoteSelector";
@@ -41,11 +41,7 @@ export default class MarginaliaPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		const basePath = normalizePath(
-			this.settings.storageLocation === 'vault'
-				? '.marginalia'
-				: `${this.manifest.dir ?? ''}/comments`
-		);
+		const basePath = resolveStorageBasePath(this.settings, this.manifest.dir);
 		this.store = new CommentStore(this.app.vault, basePath);
 		this.store.setAnchorResolver(resolveAnchor);
 		await this.store.initialize();
@@ -258,7 +254,7 @@ export default class MarginaliaPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MarginaliaSettings>);
+		this.settings = normalizeSettings(await this.loadData() as Partial<MarginaliaSettings> & {storageLocation?: 'plugin' | 'vault'});
 	}
 
 	async saveSettings() {
@@ -433,4 +429,6 @@ export default class MarginaliaPlugin extends Plugin {
 		});
 	}
 }
+
+
 

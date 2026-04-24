@@ -429,17 +429,22 @@
 }
 
 .marginalia-mobile-sheet {
-	align-items: flex-end;
-	padding: 0;
-}
-
-.marginalia-mobile-sheet .modal-container {
-	width: 100%;
-	max-width: none;
+	position: fixed;
+	left: var(--marginalia-sheet-left, 8px);
+	right: auto;
+	top: auto;
+	bottom: 0;
+	width: min(var(--marginalia-sheet-width, calc(100vw - 16px)), calc(100vw - 16px));
+	max-width: calc(100vw - 16px);
+	max-height: var(--marginalia-sheet-max-height, min(78vh, 720px));
 	margin: 0;
+	padding: 0;
 	border-radius: 18px 18px 0 0;
 	background: var(--background-primary);
 	box-shadow: var(--shadow-l);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 .marginalia-mobile-sheet-backdrop {
@@ -448,13 +453,15 @@
 
 .marginalia-mobile-sheet-content {
 	padding: 0;
-	max-height: min(78vh, 720px);
+	height: 100%;
+	max-height: var(--marginalia-sheet-max-height, min(78vh, 720px));
 	display: flex;
 	flex-direction: column;
 }
 
 .marginalia-mobile-sheet-header {
 	padding-top: 8px;
+	flex: 0 0 auto;
 }
 
 .marginalia-mobile-sheet-handle {
@@ -469,8 +476,14 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	gap: 12px;
 	padding: 0 16px 12px;
 	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.marginalia-mobile-sheet-title-wrap {
+	min-width: 0;
+	flex: 1 1 auto;
 }
 
 .marginalia-mobile-sheet-title {
@@ -482,6 +495,9 @@
 	margin-top: 2px;
 	font-size: var(--font-smallest);
 	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .marginalia-mobile-sheet-close {
@@ -493,9 +509,12 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	flex: 0 0 auto;
 }
 
 .marginalia-mobile-sheet-body {
+	flex: 1 1 auto;
+	min-height: 0;
 	overflow-y: auto;
 	padding: 8px 12px 16px;
 	-webkit-overflow-scrolling: touch;
@@ -579,4 +598,315 @@
 .is-mobile .marginalia-modal-buttons button {
 	flex: 1 1 120px;
 	min-height: 40px;
+}
+
+.marginalia-input-invalid {
+	border-color: var(--text-error) !important;
+}
+
+.is-mobile .marginalia-mobile-sheet {
+	left: var(--marginalia-sheet-left, 8px);
+	width: min(var(--marginalia-sheet-width, calc(100vw - 16px)), calc(100vw - 16px));
+	max-width: calc(100vw - 16px);
+	max-height: var(--marginalia-sheet-max-height, calc(100dvh - var(--marginalia-sheet-top-limit, 56px) - 8px));
+}
+
+.is-mobile .marginalia-mobile-sheet-content,
+.is-mobile .marginalia-mobile-sheet .modal-content {
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.marginalia-modal-layout {
+	display: flex;
+	flex-direction: column;
+}
+
+.marginalia-modal-title {
+	margin: 0 0 12px 0;
+}
+
+.marginalia-modal-body {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.marginalia-modal-footer {
+	margin-top: 12px;
+}
+
+.is-mobile .marginalia-mobile-sheet .modal-close-button {
+	display: none;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-header {
+	padding-top: 4px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-handle {
+	margin-bottom: 6px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-title-row {
+	gap: 10px;
+	padding: 0 12px 10px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-title {
+	font-size: clamp(1.4rem, 5vw, 1.85rem);
+	line-height: 1.15;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-subtitle {
+	margin-top: 1px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-close {
+	width: 32px;
+	height: 32px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-body {
+	padding: 6px 10px 12px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-panel {
+	padding: 0;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-list {
+	gap: 6px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-thread {
+	margin-bottom: 6px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-item,
+.is-mobile .marginalia-mobile-sheet .marginalia-note-item,
+.is-mobile .marginalia-mobile-sheet .marginalia-reply {
+	padding: 8px 10px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-quote {
+	margin: 0 0 4px 0;
+	padding: 3px 8px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-body {
+	margin-bottom: 4px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-footer {
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	flex-direction: row;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-actions {
+	width: auto;
+	flex-wrap: nowrap;
+	gap: 6px;
+	flex-shrink: 0;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-action-btn {
+	min-height: 32px;
+	padding: 4px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-replies {
+	margin-left: 12px;
+	padding-left: 10px;
+}
+
+.is-mobile .marginalia-comment-modal-mobile {
+	position: fixed;
+	left: 12px;
+	right: 12px;
+	top: auto;
+	bottom: calc(12px + var(--marginalia-mobile-editor-keyboard-offset, 0px));
+	width: auto;
+	max-width: none;
+	max-height: min(var(--marginalia-mobile-editor-max-height, calc(100dvh - 24px)), calc(100dvh - 24px));
+	margin: 0;
+	border-radius: 22px;
+	box-shadow: var(--shadow-l);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.is-mobile .marginalia-comment-modal-mobile .modal-container {
+	width: 100%;
+	max-width: none;
+	max-height: inherit;
+	margin: 0;
+	border-radius: inherit;
+	display: flex;
+	flex-direction: column;
+}
+
+.is-mobile .marginalia-comment-modal-mobile .modal-content,
+.is-mobile .marginalia-comment-modal-mobile .marginalia-modal {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	max-width: none;
+	max-height: inherit;
+	padding: 0;
+}
+
+.is-mobile .marginalia-comment-modal-mobile .marginalia-modal-layout {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+	height: 100%;
+	padding: 24px 16px 0;
+}
+
+.is-mobile .marginalia-comment-modal-mobile .marginalia-modal-title {
+	margin: 0;
+	padding-right: 56px;
+	font-size: clamp(1.55rem, 6vw, 2rem);
+	line-height: 1.15;
+}
+
+.is-mobile .marginalia-comment-modal-mobile .marginalia-modal-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	padding-bottom: 12px;
+	-webkit-overflow-scrolling: touch;
+}
+
+.is-mobile .marginalia-comment-modal-mobile .marginalia-modal-textarea {
+	min-height: 148px;
+	height: min(34vh, 240px);
+	font-size: var(--font-ui-medium);
+	resize: none;
+}
+
+.is-mobile .marginalia-comment-modal-mobile .marginalia-modal-footer {
+	flex: 0 0 auto;
+	margin: 0 -16px;
+	padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+	border-top: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.is-mobile .marginalia-comment-modal-mobile .marginalia-modal-buttons {
+	justify-content: stretch;
+	gap: 10px;
+	margin-top: 0;
+}
+
+.is-mobile .marginalia-comment-modal-mobile .marginalia-modal-buttons button {
+	flex: 1 1 0;
+	min-height: 44px;
+}
+
+.is-mobile .marginalia-comment-modal-mobile .marginalia-modal-hint {
+	display: none;
+}
+
+.is-mobile .marginalia-mobile-sheet {
+	padding-top: 0;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-header {
+	padding-top: 2px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-handle {
+	width: 36px;
+	height: 4px;
+	margin: 0 auto 4px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-title-row {
+	padding: 0 12px 8px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-title {
+	font-size: clamp(1.28rem, 4.8vw, 1.72rem);
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-mobile-sheet-body {
+	padding: 4px 10px 10px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-toolbar {
+	margin-bottom: 4px;
+	padding-bottom: 6px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-filter-group {
+	gap: 3px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-filter-btn {
+	font-size: 0.95rem;
+	padding: 4px 10px;
+	min-height: 34px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-more-btn,
+.is-mobile .marginalia-mobile-sheet .marginalia-add-btn {
+	min-height: 34px;
+	padding: 4px 6px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-section-header {
+	margin-bottom: 4px;
+	padding: 2px 0;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-note-section {
+	margin-bottom: 8px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-inline-editor-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-bottom: 4px;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-inline-editor {
+	width: 100%;
+	min-height: 84px;
+	padding: 10px 12px;
+	border: 1px solid var(--interactive-accent);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-family: var(--font-text);
+	font-size: var(--font-ui-medium);
+	line-height: 1.45;
+	resize: none;
+	box-sizing: border-box;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-inline-editor:focus {
+	outline: none;
+	box-shadow: 0 0 0 1px var(--interactive-accent-hover);
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-inline-editor-wrap.is-saving .marginalia-inline-editor {
+	opacity: 0.75;
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-item-editing {
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+}
+
+.is-mobile .marginalia-mobile-sheet .marginalia-inline-edit-status {
+	font-size: var(--font-smallest);
+	color: var(--text-muted);
 }
