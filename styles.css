@@ -1059,6 +1059,12 @@
 	background: var(--background-secondary);
 	color: var(--text-muted);
 	font-size: var(--font-small);
+	cursor: pointer;
+}
+
+.is-mobile .marginalia-mobile-card-quote:active {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
 }
 
 .is-mobile .marginalia-mobile-card-body {

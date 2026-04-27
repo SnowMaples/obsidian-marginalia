@@ -251,9 +251,15 @@ export class MobileCommentSheet extends Modal {
 		}
 
 		if (isAnchoredComment(card.root)) {
-			cardEl.createEl('blockquote', {
+			const quoteEl = cardEl.createEl('blockquote', {
 				text: card.root.target.exact.length > 120 ? `${card.root.target.exact.slice(0, 120)}...` : card.root.target.exact,
 				cls: 'marginalia-mobile-card-quote',
+				attr: {'aria-label': 'Jump to original text'},
+			});
+			quoteEl.addEventListener('click', (evt) => {
+				evt.preventDefault();
+				evt.stopPropagation();
+				void this.navigateToSource(card.root);
 			});
 		}
 
@@ -566,6 +572,70 @@ export class MobileCommentSheet extends Modal {
 		this.modalEl.style.setProperty('--marginalia-sheet-width', `${layout.width}px`);
 		this.modalEl.style.setProperty('--marginalia-sheet-top-limit', `${layout.topLimit}px`);
 		this.modalEl.style.setProperty('--marginalia-sheet-max-height', `${layout.maxHeight}px`);
+	}
+
+
+	private async navigateToSource(comment: RootComment): Promise<void> {
+		if (!isAnchoredComment(comment)) return;
+
+		const anchor = this.anchors.get(comment.id);
+		const file = this.currentFile;
+		if (!anchor || !file) {
+			new Notice('Original text is not available.');
+			return;
+		}
+
+		this.close();
+
+		const leaf = this.plugin.app.workspace.getLeaf(false);
+		if (!leaf) return;
+
+		await leaf.openFile(file);
+		await this.waitForFrame();
+
+		const mdView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+		if (!mdView) return;
+
+		if (mdView.getMode() === 'preview' && this.scrollPreviewToAnchor(mdView, anchor)) {
+			return;
+		}
+
+		if (!this.scrollEditorToAnchor(mdView, anchor)) {
+			new Notice('Unable to jump to original text.');
+		}
+	}
+
+	private scrollPreviewToAnchor(mdView: MarkdownView, anchor: ResolvedAnchor): boolean {
+		const previewEl = mdView.previewMode.containerEl;
+		const sections = Array.from(previewEl.querySelectorAll<HTMLElement>('[data-marginalia-line-start]'));
+		const section = sections.find((el) => {
+			const lineStart = Number.parseInt(el.dataset['marginaliaLineStart'] ?? '', 10);
+			const lineEnd = Number.parseInt(el.dataset['marginaliaLineEnd'] ?? '', 10);
+			return !Number.isNaN(lineStart) && !Number.isNaN(lineEnd) && anchor.line >= lineStart && anchor.line <= lineEnd;
+		});
+
+		if (!section) return false;
+		section.scrollIntoView({behavior: 'smooth', block: 'center'});
+		section.addClass('marginalia-item-highlight');
+		window.setTimeout(() => section.removeClass('marginalia-item-highlight'), 1600);
+		return true;
+	}
+
+	private scrollEditorToAnchor(mdView: MarkdownView, anchor: ResolvedAnchor): boolean {
+		try {
+			const editor = mdView.editor;
+			const from = editor.offsetToPos(anchor.from);
+			const to = editor.offsetToPos(anchor.to);
+			editor.setCursor(from);
+			editor.scrollIntoView({from, to}, true);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	private async waitForFrame(): Promise<void> {
+		await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
 	}
 
 	private async toggleResolution(comment: RootComment): Promise<void> {
