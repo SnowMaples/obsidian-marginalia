@@ -165,7 +165,7 @@ export default class MarginaliaPlugin extends Plugin {
 			})
 		);
 
-		// Update gutter on mode switch (source â†?preview)
+		// Update gutter on mode switch (source / preview)
 		this.registerEvent(
 			this.app.workspace.on('layout-change', () => {
 				void this.updateGutterForActiveFile();
@@ -279,6 +279,11 @@ export default class MarginaliaPlugin extends Plugin {
 
 		const filePath = view.file.path;
 
+		if (this.isMobile()) {
+			this.openMobileSheet(null, {composeTarget: target, filePath});
+			return;
+		}
+
 		new CommentModal(this.app, (body) => {
 			void this.store.addComment(filePath, body, target).then(() => {
 				void this.updateGutterForActiveFile();
@@ -288,6 +293,11 @@ export default class MarginaliaPlugin extends Plugin {
 	}
 
 	private addNoteComment(filePath: string): void {
+		if (this.isMobile()) {
+			this.openMobileSheet(null, {composeNote: true, filePath});
+			return;
+		}
+
 		new CommentModal(this.app, (body) => {
 			void this.store.addNoteComment(filePath, body).then(() => {
 				this.refreshPanel();
@@ -314,12 +324,18 @@ export default class MarginaliaPlugin extends Plugin {
 		}
 	}
 
-	private openMobileSheet(commentIds: string[] | null): void {
+	private openMobileSheet(commentIds: string[] | null, options?: {composeNote?: boolean; composeTarget?: CommentTarget; filePath?: string}): void {
 		if (!this.mobileSheet) {
 			this.mobileSheet = new MobileCommentSheet(this);
 		}
 
 		this.mobileSheet.setVisibleCommentIds(commentIds);
+		this.mobileSheet.setTargetFilePath(options?.filePath ?? this.getActiveMarkdownFilePath());
+		if (options?.composeTarget) {
+			this.mobileSheet.prepareForAnchoredComposer(options.composeTarget);
+		} else if (options?.composeNote) {
+			this.mobileSheet.prepareForNoteComposer();
+		}
 		if (this.mobileSheet.isSheetOpen) {
 			void this.mobileSheet.refresh();
 			return;
@@ -327,6 +343,19 @@ export default class MarginaliaPlugin extends Plugin {
 		this.mobileSheet.open();
 	}
 
+	private getActiveMarkdownFilePath(): string | null {
+		const activeFile = this.app.workspace.getActiveFile();
+		if (activeFile?.extension === 'md') {
+			return activeFile.path;
+		}
+
+		const mdView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (mdView?.file?.extension === 'md') {
+			return mdView.file.path;
+		}
+
+		return this.cachedFilePath;
+	}
 	private async navigateComment(editor: Editor, filePath: string, direction: 'next' | 'prev'): Promise<void> {
 		const docText = editor.getValue();
 		const anchors = await this.store.resolveAnchors(filePath, docText, this.settings.fuzzyMatchThreshold);
@@ -409,7 +438,7 @@ export default class MarginaliaPlugin extends Plugin {
 		const cmEditor = editorObj['cm'] as {dispatch: (spec: {effects: unknown}) => void} | undefined;
 		if (!cmEditor) return;
 
-		// Build a map of commentId â†?resolution for root comments
+		// Build a map of commentId to resolution for root comments
 		const resolutionMap = new Map<string, 'open' | 'resolved'>();
 		for (const c of comments) {
 			if (isRootComment(c)) {
@@ -429,6 +458,3 @@ export default class MarginaliaPlugin extends Plugin {
 		});
 	}
 }
-
-
-
