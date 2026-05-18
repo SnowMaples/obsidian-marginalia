@@ -246,6 +246,22 @@
 	box-shadow: none;
 }
 
+.marginalia-preview-btn {
+	background: none;
+	border: none;
+	box-shadow: none;
+	cursor: pointer;
+	padding: 2px;
+	color: var(--text-muted);
+	border-radius: var(--radius-s);
+}
+
+.marginalia-preview-btn:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+	box-shadow: none;
+}
+
 .marginalia-action-btn {
 	background: none;
 	border: none;

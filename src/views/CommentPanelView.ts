@@ -4,6 +4,7 @@ import type {AnchoredComment, CommentData, CommentThread, NoteComment, PanelData
 import {isReplyComment, isNoteComment, getRootResolution} from '../types';
 import {getPanelData, filterPanelData} from '../comment/threading';
 import {CommentModal} from './CommentModal';
+import {t} from '../i18n';
 
 export const VIEW_TYPE_COMMENT_PANEL = 'marginalia-panel';
 
@@ -24,7 +25,7 @@ export class CommentPanelView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return 'Comments';
+		return t.panel.title;
 	}
 
 	getIcon(): string {
@@ -106,21 +107,21 @@ export class CommentPanelView extends ItemView {
 		contentEl.empty();
 		contentEl.addClass('marginalia-panel');
 
+		this.renderToolbar(contentEl);
+
 		if (!this.currentFile) {
 			contentEl.createEl('div', {
-				text: 'Open a Markdown file to see comments.',
+				text: t.panel.openMarkdownFile,
 				cls: 'marginalia-empty',
 			});
 			return;
 		}
 
-		this.renderToolbar(contentEl);
-
 		const {noteComments, threads} = this.getFilteredPanelData();
 
 		if (noteComments.length === 0 && threads.length === 0) {
 			contentEl.createEl('div', {
-				text: 'No comments yet.',
+				text: t.panel.noComments,
 				cls: 'marginalia-empty',
 			});
 			return;
@@ -132,7 +133,7 @@ export class CommentPanelView extends ItemView {
 			const noteSection = listEl.createDiv({cls: 'marginalia-note-section'});
 			const header = noteSection.createDiv({cls: 'marginalia-section-header'});
 			setIcon(header.createSpan(), 'sticky-note');
-			header.createSpan({text: 'Note comments'});
+			header.createSpan({text: t.panel.noteComments});
 			for (const nc of noteComments) {
 				this.renderNoteComment(noteSection, nc);
 			}
@@ -142,7 +143,7 @@ export class CommentPanelView extends ItemView {
 			if (noteComments.length > 0) {
 				const anchoredHeader = listEl.createDiv({cls: 'marginalia-section-header'});
 				setIcon(anchoredHeader.createSpan(), 'message-square');
-				anchoredHeader.createSpan({text: 'Anchored comments'});
+				anchoredHeader.createSpan({text: t.panel.anchoredComments});
 			}
 			for (const thread of threads) {
 				this.renderThread(listEl, thread);
@@ -157,14 +158,14 @@ export class CommentPanelView extends ItemView {
 
 		type FilterValue = typeof this.filter;
 		const primaryFilters: Array<{label: string; value: FilterValue}> = [
-			{label: 'All', value: 'all'},
-			{label: 'Open', value: 'open'},
-			{label: 'Resolved', value: 'resolved'},
+			{label: t.panel.filters.all, value: 'all'},
+			{label: t.panel.filters.open, value: 'open'},
+			{label: t.panel.filters.resolved, value: 'resolved'},
 		];
 
 		const overflowFilters: Array<{label: string; value: FilterValue}> = [
-			{label: 'Active', value: 'active'},
-			{label: 'Orphaned', value: 'orphaned'},
+			{label: t.panel.filters.active, value: 'active'},
+			{label: t.panel.filters.orphaned, value: 'orphaned'},
 		];
 
 		for (const f of primaryFilters) {
@@ -182,7 +183,7 @@ export class CommentPanelView extends ItemView {
 		const isOverflowActive = overflowFilters.some(f => f.value === this.filter);
 		const moreBtn = filterGroup.createEl('button', {
 			cls: `marginalia-more-btn clickable-icon${isOverflowActive ? ' is-active' : ''}`,
-			attr: {'aria-label': 'More filters'},
+			attr: {'aria-label': t.panel.filters.more},
 		});
 		setIcon(moreBtn, 'more-horizontal');
 		moreBtn.addEventListener('click', () => {
@@ -204,11 +205,21 @@ export class CommentPanelView extends ItemView {
 		});
 
 		// Add note comment button
+		const previewBtn = toolbar.createEl('button', {
+			cls: 'marginalia-preview-btn clickable-icon',
+			attr: {'aria-label': t.panel.actions.previewAll},
+		});
+		setIcon(previewBtn, 'eye');
+		previewBtn.addEventListener('click', () => {
+			void this.plugin.openCommentPreviewInBrowser();
+		});
+
 		const addBtn = toolbar.createEl('button', {
 			cls: 'marginalia-add-btn clickable-icon',
-			attr: {'aria-label': 'Add note comment'},
+			attr: {'aria-label': t.panel.actions.addNoteComment},
 		});
 		setIcon(addBtn, 'plus');
+		addBtn.disabled = !this.currentFile;
 		addBtn.addEventListener('click', () => {
 			this.addNoteComment();
 		});
@@ -226,7 +237,7 @@ export class CommentPanelView extends ItemView {
 				});
 			},
 			undefined,
-			'Add note comment'
+			t.modal.addNoteComment
 		).open();
 	}
 
@@ -245,9 +256,9 @@ export class CommentPanelView extends ItemView {
 		// Note label
 		const label = item.createDiv({cls: 'marginalia-note-label'});
 		setIcon(label.createSpan(), 'sticky-note');
-		label.createSpan({text: 'Note'});
+		label.createSpan({text: t.panel.labels.note});
 		if (resolved) {
-			label.createSpan({text: ' (resolved)', cls: 'marginalia-resolved-badge'});
+			label.createSpan({text: t.panel.labels.resolvedBadge, cls: 'marginalia-resolved-badge'});
 		}
 
 		// Comment body (rendered as Markdown)
@@ -273,7 +284,7 @@ export class CommentPanelView extends ItemView {
 
 		const resolveBtn = actions.createEl('button', {
 			cls: 'marginalia-action-btn clickable-icon',
-			attr: {'aria-label': resolved ? 'Unresolve' : 'Resolve'},
+			attr: {'aria-label': resolved ? t.panel.actions.unresolve : t.panel.actions.resolve},
 		});
 		setIcon(resolveBtn, resolved ? 'circle' : 'check-circle');
 		resolveBtn.addEventListener('click', () => {
@@ -282,7 +293,7 @@ export class CommentPanelView extends ItemView {
 
 		const editBtn = actions.createEl('button', {
 			cls: 'marginalia-action-btn clickable-icon',
-			attr: {'aria-label': 'Edit comment'},
+			attr: {'aria-label': t.panel.actions.editComment},
 		});
 		setIcon(editBtn, 'pencil');
 		editBtn.addEventListener('click', () => {
@@ -291,7 +302,7 @@ export class CommentPanelView extends ItemView {
 
 		const deleteBtn = actions.createEl('button', {
 			cls: 'marginalia-action-btn clickable-icon',
-			attr: {'aria-label': 'Delete comment'},
+			attr: {'aria-label': t.panel.actions.deleteComment},
 		});
 		setIcon(deleteBtn, 'trash');
 		deleteBtn.addEventListener('click', () => {
@@ -334,13 +345,13 @@ export class CommentPanelView extends ItemView {
 
 		if (root.status === 'orphaned') {
 			quote.createEl('span', {
-				text: ' (orphaned)',
+				text: t.panel.labels.orphanedBadge,
 				cls: 'marginalia-orphaned-badge',
 			});
 		}
 		if (resolved) {
 			quote.createEl('span', {
-				text: ' (resolved)',
+				text: t.panel.labels.resolvedBadge,
 				cls: 'marginalia-resolved-badge',
 			});
 		}
@@ -373,7 +384,7 @@ export class CommentPanelView extends ItemView {
 
 		const resolveBtn = actions.createEl('button', {
 			cls: 'marginalia-action-btn clickable-icon',
-			attr: {'aria-label': resolved ? 'Unresolve' : 'Resolve'},
+			attr: {'aria-label': resolved ? t.panel.actions.unresolve : t.panel.actions.resolve},
 		});
 		setIcon(resolveBtn, resolved ? 'circle' : 'check-circle');
 		resolveBtn.addEventListener('click', () => {
@@ -382,7 +393,7 @@ export class CommentPanelView extends ItemView {
 
 		const replyBtn = actions.createEl('button', {
 			cls: 'marginalia-action-btn clickable-icon',
-			attr: {'aria-label': `Reply (${replyCount})`},
+			attr: {'aria-label': t.panel.actions.reply(replyCount)},
 		});
 		setIcon(replyBtn, 'message-circle');
 		if (replyCount > 0) {
@@ -397,7 +408,7 @@ export class CommentPanelView extends ItemView {
 
 		const editBtn = actions.createEl('button', {
 			cls: 'marginalia-action-btn clickable-icon',
-			attr: {'aria-label': 'Edit comment'},
+			attr: {'aria-label': t.panel.actions.editComment},
 		});
 		setIcon(editBtn, 'pencil');
 		editBtn.addEventListener('click', () => {
@@ -406,7 +417,7 @@ export class CommentPanelView extends ItemView {
 
 		const deleteBtn = actions.createEl('button', {
 			cls: 'marginalia-action-btn clickable-icon',
-			attr: {'aria-label': 'Delete comment'},
+			attr: {'aria-label': t.panel.actions.deleteComment},
 		});
 		setIcon(deleteBtn, 'trash');
 		deleteBtn.addEventListener('click', () => {
@@ -443,7 +454,7 @@ export class CommentPanelView extends ItemView {
 
 		const editBtn = actions.createEl('button', {
 			cls: 'marginalia-action-btn clickable-icon',
-			attr: {'aria-label': 'Edit reply'},
+			attr: {'aria-label': t.panel.actions.editReply},
 		});
 		setIcon(editBtn, 'pencil');
 		editBtn.addEventListener('click', () => {
@@ -452,7 +463,7 @@ export class CommentPanelView extends ItemView {
 
 		const deleteBtn = actions.createEl('button', {
 			cls: 'marginalia-action-btn clickable-icon',
-			attr: {'aria-label': 'Delete reply'},
+			attr: {'aria-label': t.panel.actions.deleteReply},
 		});
 		setIcon(deleteBtn, 'trash');
 		deleteBtn.addEventListener('click', () => {
@@ -493,7 +504,7 @@ export class CommentPanelView extends ItemView {
 				});
 			},
 			undefined,
-			'Add reply'
+			t.modal.addReply
 		).open();
 	}
 

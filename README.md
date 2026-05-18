@@ -17,6 +17,7 @@ Non-destructive margin comments and annotations for [Obsidian](https://obsidian.
 - **Resolve / unresolve** — Mark comments as resolved and bring them back when needed.
 - **Gutter icons** — Commented lines are marked with icons in the editor gutter. Hover to preview.
 - **Comment panel** — A dedicated sidebar panel lists all comments for the current note with filters: All / Open / Resolved / Active / Orphaned.
+- **Browser preview** — Open a read-only browser overview of all comment files tracked by Marginalia.
 - **Smart text anchoring** — Uses a 3-stage matching strategy (line hint → context-scored search → fuzzy match) so anchors stay attached even after surrounding text is edited.
 - **Markdown in comments** — Comment bodies support Markdown formatting, including `[[wikilinks]]`.
 - **Desktop and mobile** — Works on all platforms Obsidian supports.
@@ -60,6 +61,8 @@ Run the **Add note comment** command from the Command Palette, or click the "+" 
 
 Open the comment panel with the **Open comment panel** command, or click the Marginalia icon in the left ribbon. The panel shows all comments for the active note.
 
+Click the preview button in the comment panel toolbar to open a read-only browser overview of all tracked comment files.
+
 Use the filter menu to switch between views:
 
 | Filter | Shows |
@@ -94,6 +97,7 @@ Use **Go to next comment** / **Go to previous comment** to jump between commente
 | Setting | Options | Default | Description |
 | --------- | --------- | --------- | ------------- |
 | Storage location | Plugin folder (`comments/`) / Vault root (`.marginalia/`) | Plugin folder | Where comment data is stored. A migrate button moves existing data when changed. |
+| Repair comment index | Button | — | Rebuild `_index.json` from existing comment files if the index is missing or damaged. |
 | Comment sort order | Position in file / Creation date | Position in file | How comments are ordered in the sidebar panel. |
 | Show gutter icons | On / Off | On | Display comment indicators in the editor gutter. |
 | Fuzzy match threshold | 0.1 – 0.5 (slider) | 0.3 | Maximum edit distance ratio for fuzzy anchor matching. Lower = stricter. |
@@ -106,7 +110,7 @@ Marginalia never touches your `.md` files. All comment data is stored as JSON in
 - **Plugin folder** (default): `VaultFolder/.obsidian/plugins/marginalia/comments/`
 - **Vault root**: `VaultFolder/.marginalia/`
 
-Each note with comments gets its own JSON file. An `_index.json` file maps vault file paths to comment files. Vault rename and delete events are tracked automatically to keep everything in sync.
+Each note with comments gets its own JSON file. An `_index.json` file maps vault file paths to comment files. Vault rename and delete events are tracked automatically to keep everything in sync. If `_index.json` is damaged, Marginalia can rebuild it from the `sourceFile` metadata stored in each comment file.
 
 You can switch between storage locations in Settings — use the migrate button to move existing data.
 

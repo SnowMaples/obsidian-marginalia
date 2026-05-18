@@ -1,4 +1,4 @@
-import {Editor, MarkdownView, normalizePath, Plugin} from 'obsidian';
+import {Editor, MarkdownView, normalizePath, Notice, Plugin} from 'obsidian';
 import {DEFAULT_SETTINGS, MarginaliaSettings, MarginaliaSettingTab} from "./settings";
 import {CommentStore} from "./storage/CommentStore";
 import {VaultEventHandler} from "./events/VaultEventHandler";
@@ -11,7 +11,9 @@ import {CommentModal} from "./views/CommentModal";
 import type {CommentData, CommentTarget, ResolvedAnchor} from "./types";
 import {getRootResolution, isRootComment} from "./types";
 import {findNavigationTarget} from "./comment/navigation";
+import {BrowserCommentPreview} from "./preview/BrowserCommentPreview";
 import type {Extension} from "@codemirror/state";
+import {t} from "./i18n";
 
 export default class MarginaliaPlugin extends Plugin {
 	settings: MarginaliaSettings;
@@ -42,7 +44,10 @@ export default class MarginaliaPlugin extends Plugin {
 		const basePath = normalizePath(this.settings.storageLocation);
 		this.store = new CommentStore(this.app.vault, basePath);
 		this.store.setAnchorResolver(resolveAnchor);
-		await this.store.initialize();
+		const indexLoadResult = await this.store.initialize();
+		if (indexLoadResult.status === 'rebuilt' && indexLoadResult.repair) {
+			new Notice(t.notices.indexRebuilt(indexLoadResult.repair));
+		}
 
 		this.popover = new CommentPopover(this);
 
@@ -64,7 +69,7 @@ export default class MarginaliaPlugin extends Plugin {
 		// Commands
 		this.addCommand({
 			id: 'add-comment',
-			name: 'Add comment to selection',
+			name: t.commands.addComment,
 			editorCheckCallback: (checking, editor, view) => {
 				const hasSelection = editor.somethingSelected();
 				if (checking) return hasSelection;
@@ -77,7 +82,7 @@ export default class MarginaliaPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'open-comment-panel',
-			name: 'Open comment panel',
+			name: t.commands.openPanel,
 			callback: () => {
 				void this.activatePanel();
 			},
@@ -85,7 +90,7 @@ export default class MarginaliaPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'next-comment',
-			name: 'Go to next comment',
+			name: t.commands.nextComment,
 			editorCallback: (editor, view) => {
 				if (view.file) {
 					void this.navigateComment(editor, view.file.path, 'next');
@@ -95,7 +100,7 @@ export default class MarginaliaPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'prev-comment',
-			name: 'Go to previous comment',
+			name: t.commands.previousComment,
 			editorCallback: (editor, view) => {
 				if (view.file) {
 					void this.navigateComment(editor, view.file.path, 'prev');
@@ -105,7 +110,7 @@ export default class MarginaliaPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'add-note-comment',
-			name: 'Add note comment',
+			name: t.commands.addNoteComment,
 			checkCallback: (checking) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file || file.extension !== 'md') return false;
@@ -120,7 +125,7 @@ export default class MarginaliaPlugin extends Plugin {
 			this.app.workspace.on('editor-menu', (menu, editor, view) => {
 				if (editor.somethingSelected() && view.file) {
 					menu.addItem((item) => {
-						item.setTitle('Add comment')
+						item.setTitle(t.menu.addComment)
 							.setIcon('message-square')
 							.onClick(() => {
 								this.addCommentFromSelection(editor, view as MarkdownView);
@@ -129,7 +134,7 @@ export default class MarginaliaPlugin extends Plugin {
 				}
 				if (view.file) {
 					menu.addItem((item) => {
-						item.setTitle('Add note comment')
+						item.setTitle(t.menu.addNoteComment)
 							.setIcon('sticky-note')
 							.onClick(() => {
 								this.addNoteComment(view.file!.path);
@@ -140,7 +145,7 @@ export default class MarginaliaPlugin extends Plugin {
 		);
 
 		// Ribbon icon
-		this.addRibbonIcon('message-square', 'Open comment panel', () => {
+		this.addRibbonIcon('message-square', t.commands.openPanel, () => {
 			void this.activatePanel();
 		});
 
@@ -225,11 +230,33 @@ export default class MarginaliaPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MarginaliaSettings>);
+		const loaded = await this.loadData() as Partial<MarginaliaSettings> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
+		if (!loaded?.storageLocation) {
+			this.settings.storageLocation = this.getDefaultStorageLocation();
+		}
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	async openCommentPreviewInBrowser(): Promise<void> {
+		try {
+			await new BrowserCommentPreview(this.app, this.store).open();
+		} catch (e) {
+			new Notice(t.notices.previewFailed(e instanceof Error ? e.message : String(e)));
+		}
+	}
+
+	async repairCommentIndex(): Promise<void> {
+		try {
+			const result = await this.store.repairIndex();
+			new Notice(t.notices.indexRepaired(result));
+			this.refreshPanel();
+		} catch (e) {
+			new Notice(t.notices.indexRepairFailed(e instanceof Error ? e.message : String(e)));
+		}
 	}
 
 	private addCommentFromSelection(editor: Editor, view: MarkdownView): void {
@@ -263,7 +290,7 @@ export default class MarginaliaPlugin extends Plugin {
 			void this.store.addNoteComment(filePath, body).then(() => {
 				this.refreshPanel();
 			});
-		}, undefined, 'Add note comment').open();
+		}, undefined, t.modal.addNoteComment).open();
 	}
 
 	private async activatePanel(): Promise<void> {
@@ -380,5 +407,9 @@ export default class MarginaliaPlugin extends Plugin {
 		cmEditor.dispatch({
 			effects: updateCommentPositions.of(infos),
 		});
+	}
+
+	private getDefaultStorageLocation(): string {
+		return normalizePath(`${this.manifest.dir ?? ''}/comments`);
 	}
 }

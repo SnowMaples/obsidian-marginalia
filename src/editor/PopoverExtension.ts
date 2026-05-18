@@ -1,6 +1,7 @@
 import type MarginaliaPlugin from '../main';
 import {getRootResolution} from '../types';
 import {getThreads} from '../comment/threading';
+import {t} from '../i18n';
 
 export class CommentPopover {
 	private plugin: MarginaliaPlugin;
@@ -54,13 +55,13 @@ export class CommentPopover {
 				? thread.root.body.substring(0, 150) + '...'
 				: thread.root.body;
 			item.createEl('div', {
-				text: bodyPreview + (resolved ? ' (resolved)' : ''),
+				text: bodyPreview + (resolved ? t.popover.resolvedSuffix : ''),
 				cls: 'marginalia-popover-body',
 			});
 
 			if (thread.replies.length > 0) {
 				item.createEl('div', {
-					text: `${thread.replies.length} ${thread.replies.length === 1 ? 'reply' : 'replies'}`,
+					text: t.popover.replyCount(thread.replies.length),
 					cls: 'marginalia-popover-reply-count',
 				});
 			}
@@ -73,7 +74,7 @@ export class CommentPopover {
 		}
 
 		this.popoverEl.createEl('div', {
-			text: 'Click to view in panel',
+			text: t.popover.viewInPanel,
 			cls: 'marginalia-popover-hint',
 		});
 

@@ -1,4 +1,5 @@
 import {Modal, type App} from 'obsidian';
+import {t} from '../i18n';
 
 export class CommentModal extends Modal {
 	private onSave: (body: string) => void;
@@ -18,28 +19,28 @@ export class CommentModal extends Modal {
 		contentEl.addClass('marginalia-modal');
 
 		contentEl.createEl('h3', {
-			text: this.modalTitle ?? (this.initialBody ? 'Edit comment' : 'Add comment'),
+			text: this.modalTitle ?? (this.initialBody ? t.modal.editComment : t.modal.addComment),
 		});
 
 		this.textareaEl = contentEl.createEl('textarea', {
 			cls: 'marginalia-modal-textarea',
-			attr: {placeholder: 'Write your comment (Markdown supported)...'},
+			attr: {placeholder: t.modal.placeholder},
 		});
 		this.textareaEl.value = this.initialBody;
 
 		const buttonRow = contentEl.createDiv({cls: 'marginalia-modal-buttons'});
 
 		const saveBtn = buttonRow.createEl('button', {
-			text: 'Save',
+			text: t.modal.save,
 			cls: 'mod-cta',
 		});
 		saveBtn.addEventListener('click', () => this.save());
 
-		const cancelBtn = buttonRow.createEl('button', {text: 'Cancel'});
+		const cancelBtn = buttonRow.createEl('button', {text: t.modal.cancel});
 		cancelBtn.addEventListener('click', () => this.close());
 
 		const hintEl = contentEl.createDiv({cls: 'marginalia-modal-hint'});
-		hintEl.textContent = 'Ctrl/Cmd+Enter to save, Esc to cancel';
+		hintEl.textContent = t.modal.hint;
 
 		// Mod+Enter to save
 		this.scope.register(['Mod'], 'Enter', () => {

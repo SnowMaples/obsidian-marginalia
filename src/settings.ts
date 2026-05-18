@@ -1,5 +1,6 @@
 import {App, Notice, normalizePath, PluginSettingTab, Setting} from "obsidian";
 import type MarginaliaPlugin from "./main";
+import {t} from "./i18n";
 
 export interface MarginaliaSettings {
 	storageLocation: string;
@@ -30,10 +31,10 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Storage location')
-			.setDesc('Where comment data is stored. Enter a custom path or select a preset.')
+			.setName(t.settings.storageLocation.name)
+			.setDesc(t.settings.storageLocation.desc)
 			.addText(text => text
-				.setPlaceholder('.marginalia')
+				.setPlaceholder(normalizePath(`${this.plugin.manifest.dir ?? ''}/comments`))
 				.setValue(this.plugin.settings.storageLocation)
 				.onChange(async (value) => {
 					this.plugin.settings.storageLocation = value;
@@ -42,7 +43,7 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 			.addExtraButton(button => {
 				button
 					.setIcon('folder')
-					.setTooltip('Plugin folder (comments/)')
+					.setTooltip(t.settings.storageLocation.pluginFolder)
 					.onClick(async () => {
 						const path = normalizePath(`${this.plugin.manifest.dir ?? ''}/comments`);
 						this.plugin.settings.storageLocation = path;
@@ -53,7 +54,7 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 			.addExtraButton(button => {
 				button
 					.setIcon('hard-drive')
-					.setTooltip('Vault root (.marginalia/)')
+					.setTooltip(t.settings.storageLocation.vaultRoot)
 					.onClick(async () => {
 						const path = normalizePath('.marginalia');
 						this.plugin.settings.storageLocation = path;
@@ -64,17 +65,17 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 			.addExtraButton(button => {
 				button
 					.setIcon('refresh-cw')
-					.setTooltip('Migrate comment data to the entered location')
+					.setTooltip(t.settings.storageLocation.migrate)
 					.onClick(async () => {
 						const newBasePath = normalizePath(this.plugin.settings.storageLocation);
 
 						if (!newBasePath) {
-							new Notice('Please enter a storage location first.');
+							new Notice(t.settings.storageLocation.emptyPath);
 							return;
 						}
 
 						if (newBasePath === this.plugin.store.currentBasePath) {
-							new Notice('Comment data is already in the selected location.');
+							new Notice(t.settings.storageLocation.alreadySelected);
 							return;
 						}
 
@@ -84,14 +85,14 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 						try {
 							const count = await this.plugin.store.migrateData(newBasePath);
 							if (count === 0) {
-								new Notice('No comment data to migrate.');
+								new Notice(t.settings.storageLocation.noData);
 							} else {
-								new Notice(`Migrated ${count} file(s) successfully.`);
+								new Notice(t.settings.storageLocation.migrated(count));
 							}
 							this.plugin.refreshPanel();
 							this.plugin.updateGutterEffects();
 						} catch (e) {
-							new Notice(`Migration failed: ${e instanceof Error ? e.message : String(e)}`);
+							new Notice(t.settings.storageLocation.failed(e instanceof Error ? e.message : String(e)));
 						} finally {
 							button.setDisabled(false);
 							button.extraSettingsEl.removeClass('marginalia-spin');
@@ -100,11 +101,27 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('Comment sort order')
-			.setDesc('How comments are sorted in the side panel.')
+			.setName(t.settings.repairIndex.name)
+			.setDesc(t.settings.repairIndex.desc)
+			.addButton(button => {
+				button
+					.setButtonText(t.settings.repairIndex.button)
+					.onClick(async () => {
+						button.setDisabled(true);
+						try {
+							await this.plugin.repairCommentIndex();
+						} finally {
+							button.setDisabled(false);
+						}
+					});
+			});
+
+		new Setting(containerEl)
+			.setName(t.settings.sortOrder.name)
+			.setDesc(t.settings.sortOrder.desc)
 			.addDropdown(dropdown => dropdown
-				.addOption('position', 'Position in file')
-				.addOption('created', 'Creation date')
+				.addOption('position', t.settings.sortOrder.position)
+				.addOption('created', t.settings.sortOrder.created)
 				.setValue(this.plugin.settings.commentSortOrder)
 				.onChange(async (value) => {
 					this.plugin.settings.commentSortOrder = value as 'position' | 'created';
@@ -112,8 +129,8 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Show gutter icons')
-			.setDesc('Display comment icons in the editor gutter.')
+			.setName(t.settings.showGutterIcons.name)
+			.setDesc(t.settings.showGutterIcons.desc)
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.showGutterIcons)
 				.onChange(async (value) => {
@@ -122,8 +139,8 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Fuzzy match threshold')
-			.setDesc('Maximum edit distance ratio (0.0-1.0) for fuzzy anchor matching. Lower values are stricter.')
+			.setName(t.settings.fuzzyMatchThreshold.name)
+			.setDesc(t.settings.fuzzyMatchThreshold.desc)
 			.addSlider(slider => slider
 				.setLimits(0.1, 0.5, 0.05)
 				.setValue(this.plugin.settings.fuzzyMatchThreshold)
@@ -134,11 +151,11 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Orphaned comment handling')
-			.setDesc('What to do when a comment can no longer find its target text.')
+			.setName(t.settings.orphanHandling.name)
+			.setDesc(t.settings.orphanHandling.desc)
 			.addDropdown(dropdown => dropdown
-				.addOption('keep', 'Keep and notify')
-				.addOption('delete', 'Delete automatically')
+				.addOption('keep', t.settings.orphanHandling.keep)
+				.addOption('delete', t.settings.orphanHandling.delete)
 				.setValue(this.plugin.settings.orphanHandling)
 				.onChange(async (value) => {
 					this.plugin.settings.orphanHandling = value as 'keep' | 'delete';
