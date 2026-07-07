@@ -1,8 +1,9 @@
-import {MarkdownRenderer, MarkdownView, Modal, Notice, TFile, setIcon} from 'obsidian';
+import {Component, MarkdownRenderer, MarkdownView, Modal, Notice, TFile, setIcon} from 'obsidian';
 import type MarginaliaPlugin from '../main';
 import type {CommentData, CommentTarget, ResolvedAnchor, RootComment} from '../types';
 import {getRootResolution, isAnchoredComment, isReplyComment, isRootComment} from '../types';
 import {filterPanelData, getPanelData} from '../comment/threading';
+import {t} from '../i18n';
 
 interface MobileSheetLayout {
 	left: number;
@@ -38,6 +39,7 @@ export class MobileCommentSheet extends Modal {
 	private editorDraft = '';
 	private isSavingEditor = false;
 	private pendingEditorFocus = false;
+	private renderComponent = new Component();
 	isSheetOpen = false;
 
 	constructor(plugin: MarginaliaPlugin) {
@@ -72,6 +74,7 @@ export class MobileCommentSheet extends Modal {
 	}
 
 	onOpen(): void {
+		this.renderComponent.load();
 		this.isSheetOpen = true;
 		this.modalEl.addClass('marginalia-mobile-sheet');
 		this.modalEl.parentElement?.addClass('marginalia-mobile-sheet-backdrop');
@@ -81,6 +84,8 @@ export class MobileCommentSheet extends Modal {
 	}
 
 	onClose(): void {
+		this.renderComponent.unload();
+		this.renderComponent = new Component();
 		this.isSheetOpen = false;
 		this.resetInteractionState();
 		this.visibleCommentIds = null;
@@ -163,7 +168,7 @@ export class MobileCommentSheet extends Modal {
 		const titleRow = this.contentEl.createDiv({cls: 'marginalia-mobile-sheet-title-row'});
 		const titleWrap = titleRow.createDiv({cls: 'marginalia-mobile-sheet-title-wrap'});
 		titleWrap.createEl('h3', {
-			text: this.mode === 'focused' ? 'Comment' : 'Comments',
+			text: this.mode === 'focused' ? t('mobileTitleComment') : t('mobileTitleComments'),
 			cls: 'marginalia-mobile-sheet-title',
 		});
 		if (this.currentFile) {
@@ -177,7 +182,7 @@ export class MobileCommentSheet extends Modal {
 		if (this.mode === 'all') {
 			const addBtn = headerActions.createEl('button', {
 				cls: 'marginalia-mobile-sheet-add clickable-icon',
-				attr: {'aria-label': 'Add note comment'},
+				attr: {'aria-label': t('actionAddNote')},
 			});
 			setIcon(addBtn, 'plus');
 			addBtn.addEventListener('click', (evt) => {
@@ -197,7 +202,7 @@ export class MobileCommentSheet extends Modal {
 		const cards = this.getVisibleCards();
 		if (cards.length === 0) {
 			body.createEl('div', {
-				text: this.mode === 'focused' ? 'No comment found for this location.' : 'No comments yet.',
+					text: this.mode === 'focused' ? t('mobileNoFocusedComment') : t('panelNoComments'),
 				cls: 'marginalia-empty',
 			});
 			this.renderFloatingClose();
@@ -238,14 +243,14 @@ export class MobileCommentSheet extends Modal {
 
 		const meta = cardEl.createDiv({cls: 'marginalia-mobile-card-meta'});
 		const typeBadge = meta.createSpan({
-			text: isAnchoredComment(card.root) ? 'Linked comment' : 'Note',
+			text: isAnchoredComment(card.root) ? t('labelLinkedComment') : t('labelNote'),
 			cls: 'marginalia-mobile-card-badge',
 		});
 		if (resolved) typeBadge.addClass('is-resolved');
-		if (orphaned) meta.createSpan({text: 'Orphaned', cls: 'marginalia-mobile-card-badge is-warning'});
+		if (orphaned) meta.createSpan({text: t('filterOrphaned'), cls: 'marginalia-mobile-card-badge is-warning'});
 		if (card.replyCount > 0) {
 			meta.createSpan({
-				text: `${card.replyCount} ${card.replyCount === 1 ? 'reply' : 'replies'}`,
+					text: t('labelReplyCount', {count: card.replyCount}),
 				cls: 'marginalia-mobile-card-badge',
 			});
 		}
@@ -254,7 +259,7 @@ export class MobileCommentSheet extends Modal {
 			const quoteEl = cardEl.createEl('blockquote', {
 				text: card.root.target.exact.length > 120 ? `${card.root.target.exact.slice(0, 120)}...` : card.root.target.exact,
 				cls: 'marginalia-mobile-card-quote',
-				attr: {'aria-label': 'Jump to original text'},
+					attr: {'aria-label': t('mobileJumpToSource')},
 			});
 			quoteEl.addEventListener('click', (evt) => {
 				evt.preventDefault();
@@ -269,7 +274,7 @@ export class MobileCommentSheet extends Modal {
 			card.root.body,
 			bodyEl,
 			this.currentFile?.path ?? '',
-			this.plugin,
+			this.renderComponent,
 		);
 
 		cardEl.createDiv({
@@ -284,18 +289,18 @@ export class MobileCommentSheet extends Modal {
 
 	private renderActionBar(container: HTMLElement, card: MobileRootCard): void {
 		const actionBar = container.createDiv({cls: 'marginalia-mobile-actionbar'});
-		this.renderActionButton(actionBar, getRootResolution(card.root) === 'resolved' ? 'circle' : 'check-circle', 'Resolve', () => {
+		this.renderActionButton(actionBar, getRootResolution(card.root) === 'resolved' ? 'circle' : 'check-circle', getRootResolution(card.root) === 'resolved' ? t('actionUnresolve') : t('actionResolve'), () => {
 			void this.toggleResolution(card.root);
 		});
-		this.renderActionButton(actionBar, 'edit', 'Edit', () => {
+		this.renderActionButton(actionBar, 'edit', t('actionEditComment'), () => {
 			this.openEditor({kind: 'edit', commentId: card.root.id}, card.root.body);
 		});
 		if (isAnchoredComment(card.root)) {
-			this.renderActionButton(actionBar, 'corner-down-left', 'Reply', () => {
+			this.renderActionButton(actionBar, 'corner-down-left', t('previewReplies'), () => {
 				this.openEditor({kind: 'reply', parentId: card.root.id});
 			});
 		}
-		this.renderActionButton(actionBar, 'trash-2', 'Delete', () => {
+		this.renderActionButton(actionBar, 'trash-2', t('actionDeleteComment'), () => {
 			void this.deleteComment(card.root);
 		});
 	}
@@ -316,7 +321,7 @@ export class MobileCommentSheet extends Modal {
 	private renderFloatingClose(): void {
 		const closeBtn = this.contentEl.createEl('button', {
 			cls: 'marginalia-mobile-floating-close clickable-icon',
-			attr: {'aria-label': 'Close comments'},
+			attr: {'aria-label': t('mobileClose')},
 		});
 		setIcon(closeBtn, 'x');
 		closeBtn.addEventListener('click', () => this.close());
@@ -326,7 +331,7 @@ export class MobileCommentSheet extends Modal {
 		const editor = this.contentEl.createDiv({cls: 'marginalia-mobile-editor'});
 		const toolbar = editor.createDiv({cls: 'marginalia-mobile-editor-toolbar'});
 		const cancelBtn = toolbar.createEl('button', {
-			text: 'Cancel',
+			text: t('modalCancel'),
 			cls: 'marginalia-mobile-editor-cancel',
 		});
 		cancelBtn.addEventListener('click', () => this.cancelEditor());
@@ -337,7 +342,7 @@ export class MobileCommentSheet extends Modal {
 		});
 
 		const doneBtn = toolbar.createEl('button', {
-			text: this.isSavingEditor ? 'Saving...' : 'Done',
+			text: this.isSavingEditor ? t('statusSaving') : t('modalDone'),
 			cls: 'marginalia-mobile-editor-done mod-cta',
 		});
 		doneBtn.disabled = this.isSavingEditor;
@@ -348,7 +353,7 @@ export class MobileCommentSheet extends Modal {
 		const textarea = editor.createEl('textarea', {
 			cls: 'marginalia-mobile-editor-textarea',
 			attr: {
-				placeholder: 'Write your comment...',
+				placeholder: t('modalPlaceholder'),
 				'aria-label': this.getEditorTitle(),
 			},
 		});
@@ -379,16 +384,16 @@ export class MobileCommentSheet extends Modal {
 	}
 
 	private getEditorTitle(): string {
-		if (!this.editorMode) return 'Comment';
+		if (!this.editorMode) return t('mobileTitleComment');
 		switch (this.editorMode.kind) {
 			case 'anchored':
-				return 'Add comment';
+				return t('modalAddComment');
 			case 'edit':
-				return 'Edit comment';
+				return t('modalEditComment');
 			case 'note':
-				return 'Add note';
+				return t('modalAddNoteComment');
 			case 'reply':
-				return 'Add reply';
+				return t('modalAddReply');
 		}
 	}
 
@@ -413,7 +418,7 @@ export class MobileCommentSheet extends Modal {
 
 		const body = this.editorDraft.trim();
 		if (!body) {
-			new Notice('Comment cannot be empty.');
+			new Notice(t('mobileEmptyComment'));
 			this.pendingEditorFocus = true;
 			this.render();
 			return;
@@ -423,7 +428,7 @@ export class MobileCommentSheet extends Modal {
 		if (mode.kind === 'edit') {
 			const existing = this.comments.find((comment) => comment.id === mode.commentId);
 			if (!existing) {
-				new Notice('Comment not found.');
+				new Notice(t('mobileCommentNotFound'));
 				this.cancelEditor();
 				return;
 			}
@@ -455,7 +460,7 @@ export class MobileCommentSheet extends Modal {
 		} catch (error) {
 			this.isSavingEditor = false;
 			this.pendingEditorFocus = true;
-			new Notice(`Failed to save comment: ${error instanceof Error ? error.message : String(error)}`);
+			new Notice(t('noticeSaveFailed', {error: error instanceof Error ? error.message : String(error)}));
 			this.render();
 		}
 	}
@@ -581,7 +586,7 @@ export class MobileCommentSheet extends Modal {
 		const anchor = this.anchors.get(comment.id);
 		const file = this.currentFile;
 		if (!anchor || !file) {
-			new Notice('Original text is not available.');
+			new Notice(t('mobileSourceUnavailable'));
 			return;
 		}
 
@@ -601,7 +606,7 @@ export class MobileCommentSheet extends Modal {
 		}
 
 		if (!this.scrollEditorToAnchor(mdView, anchor)) {
-			new Notice('Unable to jump to original text.');
+			new Notice(t('mobileJumpFailed'));
 		}
 	}
 

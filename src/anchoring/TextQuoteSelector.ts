@@ -38,10 +38,29 @@ function resolveStage1(target: CommentTarget, docText: string): ResolvedAnchor |
 	regionEnd = Math.min(regionEnd, docText.length);
 
 	const region = docText.substring(regionStart, regionEnd);
-	const idx = region.indexOf(target.exact);
-	if (idx === -1) return null;
+	let best: {from: number; score: number; distance: number} | null = null;
+	let searchFrom = 0;
+	while (searchFrom < region.length) {
+		const idx = region.indexOf(target.exact, searchFrom);
+		if (idx === -1) break;
 
-	const absoluteFrom = regionStart + idx;
+		const absoluteFrom = regionStart + idx;
+		const absoluteTo = absoluteFrom + target.exact.length;
+		const score = scoreContext(target, docText, absoluteFrom, absoluteTo);
+		const distance = Math.abs(computeLineNumber(docText, absoluteFrom) - target.lineHint);
+		if (
+			!best ||
+			score > best.score ||
+			(score === best.score && distance < best.distance) ||
+			(score === best.score && distance === best.distance && absoluteFrom < best.from)
+		) {
+			best = {from: absoluteFrom, score, distance};
+		}
+		searchFrom = idx + 1;
+	}
+	if (!best) return null;
+
+	const absoluteFrom = best.from;
 	const absoluteTo = absoluteFrom + target.exact.length;
 	return {
 		from: absoluteFrom,

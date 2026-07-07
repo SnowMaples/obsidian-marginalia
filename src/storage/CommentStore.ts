@@ -1,7 +1,7 @@
 import {normalizePath, type Vault} from 'obsidian';
 import type {AnchoredComment, CommentData, CommentFile, CommentTarget, NoteComment, ReplyComment, ResolvedAnchor, RootComment} from '../types';
 import {isReplyComment, isAnchoredComment, isNoteComment, isRootComment, getRootResolution} from '../types';
-import {PathIndex} from './PathIndex';
+import {PathIndex, type PathIndexLoadResult, type PathIndexRepairResult} from './PathIndex';
 
 export class CommentStore {
 	private vault: Vault;
@@ -25,17 +25,27 @@ export class CommentStore {
 		this.resolveAnchorFn = fn;
 	}
 
-	async initialize(): Promise<void> {
+	async initialize(): Promise<PathIndexLoadResult> {
 		if (!(await this.vault.adapter.exists(this.basePath))) {
 			await this.vault.adapter.mkdir(this.basePath);
 		}
-		await this.pathIndex.load();
+		return this.pathIndex.load();
 	}
 
 	async getComments(notePath: string): Promise<CommentData[]> {
 		const file = await this.loadCommentFile(notePath);
 		if (!file) return [];
 		return file.comments;
+	}
+
+	getTrackedNotePaths(): string[] {
+		return this.pathIndex.getNotePaths();
+	}
+
+	async repairIndex(): Promise<PathIndexRepairResult> {
+		const result = await this.pathIndex.compact();
+		this.cache.clear();
+		return result;
 	}
 
 	async addComment(notePath: string, body: string, target: CommentTarget): Promise<AnchoredComment> {
@@ -139,7 +149,11 @@ export class CommentStore {
 			file.comments.splice(idx, 1);
 		}
 
-		this.scheduleSave(notePath);
+		if (file.comments.length === 0) {
+			await this.cleanupEmptyCommentFile(notePath);
+		} else {
+			this.scheduleSave(notePath);
+		}
 		return true;
 	}
 
@@ -185,14 +199,23 @@ export class CommentStore {
 			this.cache.delete(oldPath);
 			this.cache.set(newPath, cached);
 			this.scheduleSave(newPath);
+			return;
+		}
+
+		const file = await this.loadCommentFile(newPath);
+		if (file) {
+			file.sourceFile = newPath;
+			this.scheduleSave(newPath);
 		}
 	}
 
 	async handleDelete(notePath: string, shouldDelete: boolean): Promise<void> {
+		if (!shouldDelete) return;
+
 		const fileName = await this.pathIndex.deletePath(notePath);
 		this.cache.delete(notePath);
 
-		if (shouldDelete && fileName) {
+		if (fileName) {
 			const filePath = normalizePath(`${this.basePath}/${fileName}`);
 			if (await this.vault.adapter.exists(filePath)) {
 				await this.vault.adapter.remove(filePath);
@@ -342,6 +365,21 @@ export class CommentStore {
 
 		const filePath = normalizePath(`${this.basePath}/${fileName}`);
 		await this.vault.adapter.write(filePath, JSON.stringify(file, null, 2));
+	}
+
+	private async cleanupEmptyCommentFile(notePath: string): Promise<void> {
+		const existingTimer = this.writeTimers.get(notePath);
+		if (existingTimer) {
+			clearTimeout(existingTimer);
+			this.writeTimers.delete(notePath);
+		}
+
+		const fileName = await this.pathIndex.deletePath(notePath);
+		this.cache.delete(notePath);
+		if (!fileName) return;
+
+		const filePath = normalizePath(`${this.basePath}/${fileName}`);
+		if (await this.vault.adapter.exists(filePath)) await this.vault.adapter.remove(filePath);
 	}
 }
 

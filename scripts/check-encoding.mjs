@@ -5,7 +5,7 @@ const targets = [
 		path: 'src/i18n.ts',
 		mustInclude: [
 			'\u6570\u636e\u8def\u5f84',
-			'\u8bc4\u8bba\u6392\u5e8f\u65b9\u5f0f',
+			'\u6279\u6ce8\u6392\u5e8f\u65b9\u5f0f',
 			'\u8fc1\u79fb\u5931\u8d25\uff1a',
 		],
 	},

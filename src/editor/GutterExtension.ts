@@ -11,6 +11,7 @@ import {
 } from '@codemirror/state';
 import { setIcon } from 'obsidian';
 import type MarginaliaPlugin from '../main';
+import {t} from '../i18n';
 
 interface CommentLineInfo {
 	line: number;
@@ -48,7 +49,7 @@ class CommentIconWidget extends WidgetType {
 		if (this.allResolved) {
 			el.className += ' marginalia-gutter-resolved';
 		}
-		el.setAttribute('aria-label', `${this.count} comment${this.count > 1 ? 's' : ''}`);
+		el.setAttribute('aria-label', t('gutterCommentCount', {count: this.count}));
 		setIcon(el, this.allResolved ? 'check-circle' : 'message-square');
 
 		if (this.count > 1) {

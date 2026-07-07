@@ -3,6 +3,7 @@ import type MarginaliaPlugin from '../main';
 import type {CommentData, ResolvedAnchor} from '../types';
 import {isReplyComment} from '../types';
 import {CommentThreadList, type CommentFilter} from './CommentThreadList';
+import {t} from '../i18n';
 
 export const VIEW_TYPE_COMMENT_PANEL = 'marginalia-panel';
 
@@ -23,7 +24,7 @@ export class CommentPanelView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return 'Comments';
+		return t('panelTitle');
 	}
 
 	getIcon(): string {
@@ -121,4 +122,3 @@ export class CommentPanelView extends ItemView {
 		list.render();
 	}
 }
-

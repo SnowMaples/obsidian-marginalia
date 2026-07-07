@@ -22,6 +22,8 @@ Non-destructive margin comments and annotations for [Obsidian](https://obsidian.
 - **Mobile-safe editing** - Mobile add/edit/reply uses a top `Cancel` / `Done` editor so the keyboard does not hide the save action.
 - **Markdown in comments** - Comment bodies support Markdown formatting, including `[[wikilinks]]`.
 - **Custom data path** - Store comment data in the plugin folder, `.marginalia`, or any valid Vault-relative folder.
+- **Browser comment preview** - Open a desktop-only, read-only overview with full-text search, Front Matter titles, topic filters, and sorting.
+- **Index repair** - Rebuild a missing or damaged `_index.json` from existing sidecar files without changing note content.
 
 ## Demo
 
@@ -74,6 +76,19 @@ Use the filter menu to switch between views:
 
 Desktop also supports hover previews on gutter icons when gutter icons are enabled.
 
+Select the eye icon in the desktop comment panel to open a read-only overview in your default browser. The overview includes every indexed note and supports searching comment bodies, replies, quotes, titles, topics, and paths.
+
+The preview uses a non-empty Front Matter `title` as the article title. It merges `tag` and `tags` values, accepting either a single string or a YAML list, and exposes them as topic filters. Notes without either field remain available under **Uncategorized**.
+
+```yaml
+---
+title: A clearer article title
+tags:
+  - research
+  - reading
+---
+```
+
 ### View comments on mobile
 
 Marginalia uses a mobile-specific card surface on phones and tablets.
@@ -118,6 +133,7 @@ Use **Go to next comment** and **Go to previous comment** to move between anchor
 | Show gutter icons | On / Off | On | Display comment indicators in the editor and reading view. |
 | Fuzzy match threshold | 0.1 - 0.5 | 0.3 | Maximum edit distance ratio for fuzzy anchor matching. Lower is stricter. |
 | Orphaned comment handling | Keep / Delete automatically | Keep | What happens when a comment's target text can no longer be found. |
+| Repair comment index | Manual action | - | Rebuild `_index.json` from existing comment files. |
 
 Use the migrate button next to the storage setting to move existing comment files to the selected location.
 
@@ -135,6 +151,9 @@ The storage folder contains:
 
 - `_index.json`: maps Vault-relative Markdown paths to comment JSON files.
 - One JSON file per commented note: stores `sourceFile` and the `comments` array.
+- `_index.corrupt.<timestamp>.json`: backup created before a damaged index is rebuilt.
+
+The desktop browser overview is generated at `.obsidian/plugins/marginalia/.marginalia-preview/comment-preview.html`. It contains a read-only snapshot and is overwritten the next time a preview is opened.
 
 Vault rename and delete events are tracked so mappings stay in sync. If you change the storage location, use the migrate button in settings before relying on the new path.
 
@@ -161,6 +180,20 @@ Check encoding only:
 ```bash
 npm run check:encoding
 ```
+
+Run unit tests:
+
+```bash
+npm run test:unit
+```
+
+Desktop E2E uses an installed Obsidian application and a disposable local Vault. The Vault path is mandatory so the test cannot modify an unrelated Vault:
+
+```bash
+MARGINALIA_TEST_VAULT=/path/to/disposable-vault npm run test:e2e
+```
+
+Use `OBSIDIAN_EXECUTABLE` or `OBSIDIAN_E2E_COMMAND` when Obsidian cannot be discovered automatically.
 
 Release assets are:
 

@@ -230,7 +230,8 @@
 	color: var(--text-on-accent);
 }
 
-.marginalia-add-btn {
+.marginalia-add-btn,
+.marginalia-preview-btn {
 	background: none;
 	border: none;
 	box-shadow: none;
@@ -240,7 +241,8 @@
 	border-radius: var(--radius-s);
 }
 
-.marginalia-add-btn:hover {
+.marginalia-add-btn:hover,
+.marginalia-preview-btn:hover {
 	color: var(--text-normal);
 	background: var(--background-modifier-hover);
 	box-shadow: none;

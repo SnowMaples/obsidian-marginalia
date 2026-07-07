@@ -4,6 +4,7 @@ import type {AnchoredComment, CommentData, CommentThread, NoteComment, PanelData
 import {getRootResolution, isReplyComment, isNoteComment} from '../types';
 import {filterPanelData, getPanelData} from '../comment/threading';
 import {CommentModal} from './CommentModal';
+import {t} from '../i18n';
 
 export type CommentFilter = 'all' | 'open' | 'resolved' | 'active' | 'orphaned';
 
@@ -52,7 +53,7 @@ export class CommentThreadList {
 		this.filter = options.filter;
 		this.showToolbar = options.showToolbar;
 		this.visibleCommentIds = options.visibleCommentIds ? new Set(options.visibleCommentIds) : null;
-		this.emptyText = options.emptyText ?? 'No comments yet.';
+		this.emptyText = options.emptyText ?? t('panelNoComments');
 		this.onFilterChange = options.onFilterChange;
 		this.onAfterChange = options.onAfterChange;
 	}
@@ -63,7 +64,7 @@ export class CommentThreadList {
 
 		if (!this.currentFile) {
 			this.container.createEl('div', {
-				text: 'Open a Markdown file to see comments.',
+				text: t('panelOpenMarkdown'),
 				cls: 'marginalia-empty',
 			});
 			return;
@@ -88,7 +89,7 @@ export class CommentThreadList {
 			const noteSection = listEl.createDiv({cls: 'marginalia-note-section'});
 			const header = noteSection.createDiv({cls: 'marginalia-section-header'});
 			setIcon(header.createSpan(), 'sticky-note');
-			header.createSpan({text: 'Note comments'});
+			header.createSpan({text: t('panelNoteComments')});
 			for (const nc of noteComments) {
 				this.renderNoteComment(noteSection, nc);
 			}
@@ -98,7 +99,7 @@ export class CommentThreadList {
 			if (noteComments.length > 0) {
 				const anchoredHeader = listEl.createDiv({cls: 'marginalia-section-header'});
 				setIcon(anchoredHeader.createSpan(), 'message-square');
-				anchoredHeader.createSpan({text: 'Anchored comments'});
+				anchoredHeader.createSpan({text: t('panelAnchoredComments')});
 			}
 			for (const thread of threads) {
 				this.renderThread(listEl, thread);
@@ -146,14 +147,14 @@ export class CommentThreadList {
 		type FilterValue = CommentFilter;
 
 		const primaryFilters: Array<{label: string; value: FilterValue}> = [
-			{label: 'All', value: 'all'},
-			{label: 'Open', value: 'open'},
-			{label: 'Resolved', value: 'resolved'},
+			{label: t('filterAll'), value: 'all'},
+			{label: t('filterOpen'), value: 'open'},
+			{label: t('filterResolved'), value: 'resolved'},
 		];
 
 		const overflowFilters: Array<{label: string; value: FilterValue}> = [
-			{label: 'Active', value: 'active'},
-			{label: 'Orphaned', value: 'orphaned'},
+			{label: t('filterActive'), value: 'active'},
+			{label: t('filterOrphaned'), value: 'orphaned'},
 		];
 
 		for (const f of primaryFilters) {
@@ -169,7 +170,7 @@ export class CommentThreadList {
 		const isOverflowActive = overflowFilters.some(f => f.value === this.filter);
 		const moreBtn = filterGroup.createEl('button', {
 			cls: `marginalia-more-btn clickable-icon${isOverflowActive ? ' is-active' : ''}`,
-			attr: {'aria-label': 'More filters'},
+			attr: {'aria-label': t('filterMore')},
 		});
 		setIcon(moreBtn, 'more-horizontal');
 		moreBtn.addEventListener('click', () => {
@@ -189,11 +190,23 @@ export class CommentThreadList {
 			}));
 		});
 
+		if (Platform.isDesktopApp) {
+			const previewBtn = toolbar.createEl('button', {
+				cls: 'marginalia-preview-btn clickable-icon',
+				attr: {'aria-label': t('actionPreviewAll')},
+			});
+			setIcon(previewBtn, 'eye');
+			previewBtn.addEventListener('click', () => {
+				void this.plugin.openCommentPreviewInBrowser();
+			});
+		}
+
 		const addBtn = toolbar.createEl('button', {
 			cls: 'marginalia-add-btn clickable-icon',
-			attr: {'aria-label': 'Add note comment'},
+			attr: {'aria-label': t('actionAddNote')},
 		});
 		setIcon(addBtn, 'plus');
+		addBtn.disabled = !this.currentFile;
 		addBtn.addEventListener('click', () => {
 			this.addNoteComment();
 		});
@@ -211,7 +224,7 @@ export class CommentThreadList {
 				});
 			},
 			undefined,
-			'Add note comment'
+			t('modalAddNoteComment')
 		).open();
 	}
 
@@ -225,9 +238,9 @@ export class CommentThreadList {
 
 		const label = item.createDiv({cls: 'marginalia-note-label'});
 		setIcon(label.createSpan(), 'sticky-note');
-		label.createSpan({text: 'Note'});
+		label.createSpan({text: t('labelNote')});
 		if (resolved) {
-			label.createSpan({text: ' (resolved)', cls: 'marginalia-resolved-badge'});
+			label.createSpan({text: t('labelResolvedSuffix'), cls: 'marginalia-resolved-badge'});
 		}
 
 		this.renderCommentBody(item, nc);
@@ -275,13 +288,13 @@ export class CommentThreadList {
 
 		if (root.status === 'orphaned') {
 			quote.createEl('span', {
-				text: ' (orphaned)',
+				text: t('labelOrphanedSuffix'),
 				cls: 'marginalia-orphaned-badge',
 			});
 		}
 		if (resolved) {
 			quote.createEl('span', {
-				text: ' (resolved)',
+				text: t('labelResolvedSuffix'),
 				cls: 'marginalia-resolved-badge',
 			});
 		}
@@ -341,7 +354,7 @@ export class CommentThreadList {
 			cls: 'marginalia-inline-editor',
 			attr: {
 				'data-inline-editor-for': comment.id,
-				'aria-label': 'Edit comment',
+				'aria-label': t('actionEditComment'),
 			},
 		});
 		textarea.value = this.editingDraft;
@@ -366,7 +379,7 @@ export class CommentThreadList {
 		});
 
 		editorWrap.createDiv({
-			text: this.savingCommentId === comment.id ? 'Saving…' : 'Tap outside to save',
+			text: this.savingCommentId === comment.id ? t('statusSaving') : t('statusTapOutside'),
 			cls: 'marginalia-inline-edit-status',
 		});
 	}
@@ -391,7 +404,7 @@ export class CommentThreadList {
 
 		if (editing) {
 			footer.createEl('span', {
-				text: this.savingCommentId === comment.id ? 'Saving…' : 'Editing',
+				text: this.savingCommentId === comment.id ? t('statusSaving') : t('statusEditing'),
 				cls: 'marginalia-inline-edit-status',
 			});
 			return;
@@ -401,7 +414,7 @@ export class CommentThreadList {
 		if (onToggleResolve) {
 			const resolveBtn = actions.createEl('button', {
 				cls: 'marginalia-action-btn clickable-icon',
-				attr: {'aria-label': resolved ? 'Unresolve' : 'Resolve'},
+				attr: {'aria-label': resolved ? t('actionUnresolve') : t('actionResolve')},
 			});
 			setIcon(resolveBtn, resolved ? 'circle' : 'check-circle');
 			resolveBtn.addEventListener('click', onToggleResolve);
@@ -410,7 +423,7 @@ export class CommentThreadList {
 		if (onReply) {
 			const replyBtn = actions.createEl('button', {
 				cls: 'marginalia-action-btn clickable-icon',
-				attr: {'aria-label': `Reply (${replyCount ?? 0})`},
+				attr: {'aria-label': t('actionReply', {count: replyCount ?? 0})},
 			});
 			setIcon(replyBtn, 'corner-down-left');
 			if (replyCount && replyCount > 0) {
@@ -425,7 +438,7 @@ export class CommentThreadList {
 		if (onEdit) {
 			const editBtn = actions.createEl('button', {
 				cls: 'marginalia-action-btn clickable-icon',
-				attr: {'aria-label': 'Edit comment'},
+				attr: {'aria-label': isReplyComment(comment) ? t('actionEditReply') : t('actionEditComment')},
 			});
 			setIcon(editBtn, 'edit');
 			editBtn.addEventListener('click', onEdit);
@@ -434,7 +447,7 @@ export class CommentThreadList {
 		if (onDelete) {
 			const deleteBtn = actions.createEl('button', {
 				cls: 'marginalia-action-btn clickable-icon',
-				attr: {'aria-label': 'Delete comment'},
+				attr: {'aria-label': isReplyComment(comment) ? t('actionDeleteReply') : t('actionDeleteComment')},
 			});
 			setIcon(deleteBtn, 'trash-2');
 			deleteBtn.addEventListener('click', onDelete);
@@ -474,7 +487,7 @@ export class CommentThreadList {
 				});
 			},
 			undefined,
-			'Add reply'
+			t('modalAddReply')
 		).open();
 	}
 
@@ -547,7 +560,7 @@ export class CommentThreadList {
 		} catch (error) {
 			this.savingCommentId = null;
 			this.pendingFocusCommentId = comment.id;
-			new Notice(`Failed to save comment: ${error instanceof Error ? error.message : String(error)}`);
+			new Notice(t('noticeSaveFailed', {error: error instanceof Error ? error.message : String(error)}));
 			this.render();
 		}
 	}
@@ -589,8 +602,8 @@ export class CommentThreadList {
 	}
 
 	private autosizeInlineEditor(textarea: HTMLTextAreaElement): void {
-		textarea.style.height = 'auto';
-		textarea.style.height = `${Math.max(textarea.scrollHeight, 84)}px`;
+		textarea.setCssProps({'height': 'auto'});
+		textarea.setCssProps({'height': `${Math.max(textarea.scrollHeight, 84)}px`});
 	}
 
 	private async toggleResolution(comment: RootComment): Promise<void> {

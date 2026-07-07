@@ -1,6 +1,7 @@
 import {MarkdownRenderChild, MarkdownView, setIcon} from 'obsidian';
 import type {MarkdownPostProcessorContext} from 'obsidian';
 import type MarginaliaPlugin from '../main';
+import {t} from '../i18n';
 import {isRootComment, getRootResolution} from '../types';
 
 interface LineGroup {
@@ -129,7 +130,7 @@ export class ReadingGutter {
 		if (group.allResolved) {
 			el.className += ' marginalia-gutter-resolved';
 		}
-		el.setAttribute('aria-label', `${group.count} comment${group.count > 1 ? 's' : ''}`);
+		el.setAttribute('aria-label', t('gutterCommentCount', {count: group.count}));
 		setIcon(el, group.allResolved ? 'check-circle' : 'message-square');
 
 		if (group.count > 1) {

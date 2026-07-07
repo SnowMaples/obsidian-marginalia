@@ -14,7 +14,7 @@ export interface MarginaliaSettings {
 }
 
 type LegacyMarginaliaSettings = Partial<MarginaliaSettings> & {
-	storageLocation?: 'plugin' | 'vault';
+	storageLocation?: string;
 };
 
 export const DEFAULT_SETTINGS: MarginaliaSettings = {
@@ -48,11 +48,33 @@ export function resolveStorageBasePath(settings: MarginaliaSettings, manifestDir
 	return normalizePath(`${manifestDir ?? ''}/comments`);
 }
 
-export function normalizeSettings(raw: LegacyMarginaliaSettings | null | undefined): MarginaliaSettings {
-	const storagePreset = raw?.storagePreset ?? raw?.storageLocation ?? DEFAULT_SETTINGS.storagePreset;
-	const normalizedPreset: StoragePreset = storagePreset === 'vault' || storagePreset === 'custom' ? storagePreset : 'plugin';
-	const normalizedCustomPath = validateCustomStoragePath(raw?.customStoragePath ?? DEFAULT_SETTINGS.customStoragePath)
-		?? DEFAULT_SETTINGS.customStoragePath;
+export function normalizeSettings(
+	raw: LegacyMarginaliaSettings | null | undefined,
+	manifestDir?: string,
+): MarginaliaSettings {
+	let normalizedPreset: StoragePreset = DEFAULT_SETTINGS.storagePreset;
+	let customPathCandidate = raw?.customStoragePath ?? DEFAULT_SETTINGS.customStoragePath;
+
+	if (raw?.storagePreset === 'plugin' || raw?.storagePreset === 'vault' || raw?.storagePreset === 'custom') {
+		normalizedPreset = raw.storagePreset;
+	} else if (raw?.storageLocation === 'vault') {
+		normalizedPreset = 'vault';
+	} else if (raw?.storageLocation === 'plugin') {
+		normalizedPreset = 'plugin';
+	} else if (typeof raw?.storageLocation === 'string') {
+		const legacyPath = validateCustomStoragePath(raw.storageLocation);
+		const pluginPath = normalizePath(`${manifestDir ?? ''}/comments`);
+		if (legacyPath === '.marginalia') {
+			normalizedPreset = 'vault';
+		} else if (legacyPath && legacyPath === pluginPath) {
+			normalizedPreset = 'plugin';
+		} else if (legacyPath) {
+			normalizedPreset = 'custom';
+			customPathCandidate = legacyPath;
+		}
+	}
+
+	const normalizedCustomPath = validateCustomStoragePath(customPathCandidate) ?? DEFAULT_SETTINGS.customStoragePath;
 
 	return {
 		storagePreset: normalizedPreset,
@@ -177,6 +199,20 @@ export class MarginaliaSettingTab extends PluginSettingTab {
 					}
 				});
 			});
+
+		new Setting(containerEl)
+			.setName(t('settingsRepairName'))
+			.setDesc(t('settingsRepairDesc'))
+			.addButton(button => button
+				.setButtonText(t('settingsRepairButton'))
+				.onClick(async () => {
+					button.setDisabled(true);
+					try {
+						await this.plugin.repairCommentIndex();
+					} finally {
+						button.setDisabled(false);
+					}
+				}));
 
 		new Setting(containerEl)
 			.setName(t('settingsSortName'))
