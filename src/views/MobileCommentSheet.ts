@@ -6,11 +6,17 @@ import {filterPanelData, getPanelData} from '../comment/threading';
 import {t} from '../i18n';
 
 interface MobileSheetLayout {
+	centerX: number;
+	keyboardOffset: number;
 	left: number;
 	maxHeight: number;
 	topLimit: number;
+	viewportHeight: number;
 	width: number;
 }
+
+const TABLET_SHEET_MIN_WIDTH = 768;
+const TABLET_SHEET_MAX_WIDTH = 860;
 
 interface MobileRootCard {
 	root: RootComment;
@@ -40,13 +46,14 @@ export class MobileCommentSheet extends Modal {
 	private isSavingEditor = false;
 	private pendingEditorFocus = false;
 	private renderComponent = new Component();
+	private visualViewport: VisualViewport | null = null;
 	isSheetOpen = false;
 
 	constructor(plugin: MarginaliaPlugin) {
 		super(plugin.app);
 		this.plugin = plugin;
 		this.resizeHandler = () => {
-			void this.refresh();
+			this.updateLayout();
 		};
 	}
 
@@ -76,11 +83,11 @@ export class MobileCommentSheet extends Modal {
 	onOpen(): void {
 		this.renderComponent.load();
 		this.isSheetOpen = true;
-		this.modalEl.addClass('marginalia-mobile-sheet');
-		this.modalEl.parentElement?.addClass('marginalia-mobile-sheet-backdrop');
-		this.setDefaultCloseButtonVisible(false);
-		window.addEventListener('resize', this.resizeHandler, {passive: true});
-		void this.refresh();
+			this.modalEl.addClass('marginalia-mobile-sheet');
+			this.modalEl.parentElement?.addClass('marginalia-mobile-sheet-backdrop');
+			this.setDefaultCloseButtonVisible(false);
+			this.bindViewportHandlers();
+			void this.refresh();
 	}
 
 	onClose(): void {
@@ -88,12 +95,12 @@ export class MobileCommentSheet extends Modal {
 		this.renderComponent = new Component();
 		this.isSheetOpen = false;
 		this.resetInteractionState();
-		this.visibleCommentIds = null;
-		this.targetFilePath = null;
-		window.removeEventListener('resize', this.resizeHandler);
-		this.setDefaultCloseButtonVisible(true);
-		this.clearLayout();
-		this.contentEl.empty();
+			this.visibleCommentIds = null;
+			this.targetFilePath = null;
+			this.teardownViewportHandlers();
+			this.setDefaultCloseButtonVisible(true);
+			this.clearLayout();
+			this.contentEl.empty();
 		this.modalEl.removeClass('marginalia-mobile-sheet');
 		this.modalEl.parentElement?.removeClass('marginalia-mobile-sheet-backdrop');
 	}
@@ -521,6 +528,9 @@ export class MobileCommentSheet extends Modal {
 		this.modalEl.style.removeProperty('--marginalia-sheet-width');
 		this.modalEl.style.removeProperty('--marginalia-sheet-max-height');
 		this.modalEl.style.removeProperty('--marginalia-sheet-top-limit');
+		this.modalEl.style.removeProperty('--marginalia-sheet-keyboard-offset');
+		this.modalEl.style.removeProperty('--marginalia-sheet-viewport-height');
+		this.modalEl.style.removeProperty('--marginalia-sheet-center-x');
 	}
 
 	private setDefaultCloseButtonVisible(visible: boolean): void {
@@ -534,11 +544,12 @@ export class MobileCommentSheet extends Modal {
 
 	private computeMobileSheetLayout(): MobileSheetLayout {
 		const viewportWidth = window.innerWidth;
-		const viewportHeight = window.innerHeight;
+		const {keyboardOffset, viewportHeight} = this.getViewportMetrics();
 		const sideMargin = 12;
-		const bottomMargin = 88;
+		const bottomMargin = 92;
 		const minWidth = 280;
 		const minimumHeight = 240;
+		const isTabletWidth = viewportWidth >= TABLET_SHEET_MIN_WIDTH;
 
 		let left = sideMargin;
 		let width = Math.max(minWidth, viewportWidth - sideMargin * 2);
@@ -555,20 +566,51 @@ export class MobileCommentSheet extends Modal {
 			width = Math.max(minWidth, Math.min(Math.round(contentRect.width), viewportWidth - sideMargin * 2));
 			topLimit = Math.max(16, Math.round(Math.max(headerBottom, contentRect.top)));
 
+			if (isTabletWidth) {
+				const availableWidth = Math.min(Math.round(contentRect.width), viewportWidth - sideMargin * 2);
+				width = Math.max(minWidth, Math.min(availableWidth, TABLET_SHEET_MAX_WIDTH));
+				left = Math.round(contentRect.left + Math.max(0, availableWidth - width) / 2);
+			}
+
 			const maxAllowedLeft = viewportWidth - sideMargin - width;
 			left = Math.min(left, Math.max(sideMargin, maxAllowedLeft));
+		} else if (isTabletWidth) {
+			width = Math.max(minWidth, Math.min(width, TABLET_SHEET_MAX_WIDTH));
+			left = Math.round((viewportWidth - width) / 2);
 		}
 
-		const safeBottom = this.getSafeAreaInsetBottom();
-		const maxHeight = Math.max(minimumHeight, Math.floor(viewportHeight - topLimit - safeBottom - bottomMargin));
+		const maxHeight = Math.max(minimumHeight, Math.floor(viewportHeight - topLimit - bottomMargin));
+		const centerX = Math.round(left + width / 2);
 
-		return {left, width, topLimit, maxHeight};
+		return {centerX, keyboardOffset, left, maxHeight, topLimit, viewportHeight, width};
 	}
 
-	private getSafeAreaInsetBottom(): number {
-		return Number.parseFloat(
-			getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)') || '0'
-		) || 0;
+	private getViewportMetrics(): {keyboardOffset: number; viewportHeight: number} {
+		const viewport = window.visualViewport ?? this.visualViewport;
+		if (!viewport) {
+			return {keyboardOffset: 0, viewportHeight: window.innerHeight};
+		}
+
+		const viewportHeight = Math.max(0, Math.round(viewport.height));
+		const keyboardOffset = Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+		return {keyboardOffset, viewportHeight};
+	}
+
+	private bindViewportHandlers(): void {
+		window.addEventListener('resize', this.resizeHandler, {passive: true});
+		this.visualViewport = window.visualViewport ?? null;
+		if (!this.visualViewport) return;
+		this.visualViewport.addEventListener('resize', this.resizeHandler, {passive: true});
+		this.visualViewport.addEventListener('scroll', this.resizeHandler, {passive: true});
+	}
+
+	private teardownViewportHandlers(): void {
+		window.removeEventListener('resize', this.resizeHandler);
+		if (this.visualViewport) {
+			this.visualViewport.removeEventListener('resize', this.resizeHandler);
+			this.visualViewport.removeEventListener('scroll', this.resizeHandler);
+			this.visualViewport = null;
+		}
 	}
 
 	private updateLayout(): void {
@@ -577,6 +619,9 @@ export class MobileCommentSheet extends Modal {
 		this.modalEl.style.setProperty('--marginalia-sheet-width', `${layout.width}px`);
 		this.modalEl.style.setProperty('--marginalia-sheet-top-limit', `${layout.topLimit}px`);
 		this.modalEl.style.setProperty('--marginalia-sheet-max-height', `${layout.maxHeight}px`);
+		this.modalEl.style.setProperty('--marginalia-sheet-keyboard-offset', `${layout.keyboardOffset}px`);
+		this.modalEl.style.setProperty('--marginalia-sheet-viewport-height', `${layout.viewportHeight}px`);
+		this.modalEl.style.setProperty('--marginalia-sheet-center-x', `${layout.centerX}px`);
 	}
 
 

@@ -193,6 +193,12 @@ Desktop E2E uses an installed Obsidian application and a disposable local Vault.
 MARGINALIA_TEST_VAULT=/path/to/disposable-vault npm run test:e2e
 ```
 
+Tablet E2E uses Obsidian's built-in mobile emulator and checks the tablet mobile sheet layout:
+
+```bash
+MARGINALIA_TEST_VAULT=/path/to/disposable-vault npm run test:e2e:tablet
+```
+
 Use `OBSIDIAN_EXECUTABLE` or `OBSIDIAN_E2E_COMMAND` when Obsidian cannot be discovered automatically.
 
 Release assets are:

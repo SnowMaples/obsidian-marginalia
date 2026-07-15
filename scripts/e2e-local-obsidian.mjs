@@ -73,6 +73,8 @@ try {
 		return Boolean(obsidianApp?.plugins?.plugins?.[id] && obsidianApp?.commands?.commands?.[`${id}:open-comment-panel`]);
 	}, pluginId, {timeout: 30000});
 
+	const dragResult = await runDesktopCommentModalDragTest(page, pluginId);
+
 	const result = await page.evaluate(async (id) => {
 		const obsidianApp = window.app;
 		if (!obsidianApp) {
@@ -156,8 +158,11 @@ try {
 	if (!result.previewUsesFrontmatterTitle || !result.previewUsesTopics || !result.previewRemovedStatusFilters) {
 		throw new Error(`批注预览 Front Matter/主题筛选不符合预期：${JSON.stringify(result)}`);
 	}
+	if (!dragResult.moved || !dragResult.withinViewport || dragResult.isMobileModal) {
+		throw new Error(`PC 批注弹窗拖拽不符合预期：${JSON.stringify(dragResult)}`);
+	}
 
-	console.log(`E2E passed: ${pluginId} loaded, panel=${result.panelLeaves}, preview=${result.previewButtons}, topics=true, repaired=${result.repairedMappings}`);
+	console.log(`E2E passed: ${pluginId} loaded, panel=${result.panelLeaves}, preview=${result.previewButtons}, topics=true, repaired=${result.repairedMappings}, modalDrag=${dragResult.deltaX}x${dragResult.deltaY}`);
 } catch (error) {
 	if (stderr.trim()) {
 		console.error(stderr.trim());
@@ -231,6 +236,73 @@ function findObsidianExecutable() {
 	}
 
 	return null;
+}
+
+async function runDesktopCommentModalDragTest(page, id) {
+	await page.evaluate(async (pluginId) => {
+		const obsidianApp = window.app;
+		if (!obsidianApp) {
+			throw new Error('window.app 不存在');
+		}
+
+		const testFilePath = 'marginalia-modal-drag-e2e.md';
+		let testFile = obsidianApp.vault.getAbstractFileByPath(testFilePath);
+		if (!testFile) {
+			testFile = await obsidianApp.vault.create(testFilePath, '# Marginalia Modal Drag E2E\n\nTest note.');
+		}
+		await obsidianApp.workspace.getLeaf(false).openFile(testFile);
+		const commandId = `${pluginId}:add-note-comment`;
+		if (!obsidianApp.commands.commands[commandId]) {
+			throw new Error(`命令未注册：${commandId}`);
+		}
+		await obsidianApp.commands.executeCommandById(commandId);
+	}, id);
+
+	const modalLocator = page.locator('.marginalia-comment-modal:not(.marginalia-comment-modal-mobile)');
+	const titleLocator = page.locator('.marginalia-comment-modal:not(.marginalia-comment-modal-mobile) .marginalia-modal-title');
+	await titleLocator.waitFor({timeout: 10000});
+	await page.waitForTimeout(250);
+	const before = await modalLocator.boundingBox();
+	const titleBox = await titleLocator.boundingBox();
+	if (!before || !titleBox) {
+		throw new Error('无法获取 PC 批注弹窗或标题区域位置。');
+	}
+
+	const startX = titleBox.x + titleBox.width / 2;
+	const startY = titleBox.y + titleBox.height / 2;
+	await page.mouse.move(startX, startY);
+	await page.mouse.down();
+	await page.mouse.move(startX - 120, startY + 70, {steps: 6});
+	await page.mouse.up();
+	await page.waitForTimeout(100);
+
+	const after = await modalLocator.boundingBox();
+	if (!after) {
+		throw new Error('拖拽后 PC 批注弹窗消失。');
+	}
+	const isMobileModal = await modalLocator.evaluate((modal) => modal.classList.contains('marginalia-comment-modal-mobile'));
+	const viewportSize = await page.evaluate(() => ({height: window.innerHeight, width: window.innerWidth}));
+	await page.evaluate(() => {
+		const closeButton = document.querySelector('.marginalia-comment-modal .modal-close-button');
+		if (closeButton instanceof HTMLElement) {
+			closeButton.click();
+			return;
+		}
+		const cancelButton = [...document.querySelectorAll('.marginalia-comment-modal button')]
+			.find((button) => button.textContent?.trim() === 'Cancel' || button.textContent?.trim() === '取消');
+		if (cancelButton instanceof HTMLElement) cancelButton.click();
+	});
+	await page.waitForFunction(() => !document.querySelector('.marginalia-comment-modal'), null, {timeout: 10000});
+
+	const deltaX = Math.round(after.x - before.x);
+	const deltaY = Math.round(after.y - before.y);
+	return {
+		deltaX,
+		deltaY,
+		isMobileModal,
+		moved: Math.abs(deltaX) >= 80 && Math.abs(deltaY) >= 40,
+		withinViewport: after.x >= 0 && after.y >= 0 && after.x + after.width <= viewportSize.width && after.y + after.height <= viewportSize.height,
+	};
 }
 
 async function waitForCdp(port, timeoutMs) {
